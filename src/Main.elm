@@ -58,7 +58,7 @@ view model =
         [ WebGL.entity
             vertexShader
             fragmentShader
-            mesh
+            pizzaCutterMesh
             { perspective = perspective (model.time / 1000) }
         ]
 
@@ -90,7 +90,21 @@ mesh =
         ]
 
 
+circleVertexPositions : Float -> Int -> List Vec3
+circleVertexPositions radius numberOfSegments =
+    [ vec3 0 0 0
+    ] ++
+    List.map
+        (\i -> let angle = turns (toFloat i / toFloat numberOfSegments)
+               in vec3 (cos angle) (sin angle) 0)
+        (List.range 0 numberOfSegments)
 
+
+pizzaCutterMesh : Mesh Vertex
+pizzaCutterMesh =
+    circleVertexPositions 1 32
+        |> List.map (\pos -> Vertex pos (vec3 0.5 0.5 0.5))
+        |> WebGL.triangleFan
 -- Shaders
 
 
