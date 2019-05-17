@@ -1,7 +1,7 @@
 module Triangle exposing (main)
 
 {-
-   Rotating triangle, that is a "hello world" of the WebGL
+   Rotating triangle, that is a "Hello, World!" of the WebGL
 -}
 
 import Browser
