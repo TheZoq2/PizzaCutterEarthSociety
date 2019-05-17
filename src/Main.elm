@@ -13,19 +13,43 @@ import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector3 as Vec3 exposing (vec3, Vec3)
 import Json.Decode exposing (Value)
 
+type alias Model =
+    { time : Float
+    }
 
-main : Program Value Float Float
+init : Model
+init = {time = 0}
+
+
+type Msg
+    = Tick Float
+
+
+
+
+update : Msg -> Model -> (Model, Cmd Msg)
+update message model =
+    case message of
+        Tick elapsed -> ({ model | time = model.time + elapsed }, Cmd.none)
+
+
+
+
+
+main : Program Value Model Msg
 main =
     Browser.element
-        { init = \_ -> ( 0, Cmd.none )
+        { init = \_ -> ( init, Cmd.none )
         , view = view
-        , subscriptions = (\_ -> onAnimationFrameDelta Basics.identity)
-        , update = (\elapsed currentTime -> ( elapsed + currentTime, Cmd.none ))
+        , subscriptions = (\_ -> onAnimationFrameDelta Tick)
+        , update = update
         }
 
 
-view : Float -> Html msg
-view t =
+
+
+view : Model -> Html msg
+view model =
     WebGL.toHtml
         [ width 400
         , height 400
@@ -35,7 +59,7 @@ view t =
             vertexShader
             fragmentShader
             mesh
-            { perspective = perspective (t / 1000) }
+            { perspective = perspective (model.time / 1000) }
         ]
 
 
