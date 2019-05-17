@@ -1,86 +1,90 @@
-module Triangle exposing (main)
+module Main exposing (main)
 
 {-
    Rotating triangle, that is a "Hello, World!" of the WebGL
 -}
 
 import Browser
-import Browser.Events exposing (onAnimationFrameDelta)
+import Browser.Events exposing (onAnimationFrameDelta, onKeyUp, onKeyDown)
+
 import Html exposing (Html)
 import Html.Attributes exposing (width, height, style)
 import WebGL exposing (Mesh, Shader)
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector3 as Vec3 exposing (vec3, Vec3)
-import Json.Decode exposing (Value)
+import Json.Decode as D
 
-type alias Model =
-    { time : Float
-    }
+import Dict
+
+import Model exposing (Model)
+import Msg exposing (Msg (..))
+
+import Key
+import Camera
 
 init : Model
-init = {time = 0}
-
-
-type Msg
-    = Tick Float
-
-
+init = { time = 0
+       , keys = Dict.empty
+       , theta = 3.0
+       }
 
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update message model =
-    case message of
-        Tick elapsed -> ({ model | time = model.time + elapsed }, Cmd.none)
+    let next_model =
+            case message of
+                Tick elapsed -> { model | time  = model.time + elapsed }
+                TimeDelta d  -> { model | theta = model.theta + Camera.posDelta model.keys d }
+                KeyChange status str -> { model | keys = Key.update str status model.keys }
+    in (next_model, Cmd.none)
 
 
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.batch
+        [ onAnimationFrameDelta Tick
+        , onKeyUp   <| Key.decoder KeyChange Key.Up
+        , onKeyDown <| Key.decoder KeyChange Key.Down
+        , onAnimationFrameDelta TimeDelta
+        ]
 
-
-
-main : Program Value Model Msg
+main : Program D.Value Model Msg
 main =
     Browser.element
         { init = \_ -> ( init, Cmd.none )
         , view = view
-        , subscriptions = (\_ -> onAnimationFrameDelta Tick)
+        , subscriptions = subscriptions
         , update = update
         }
 
 
-
-
 view : Model -> Html msg
 view model =
-    let
-        persp =
-            perspective (model.time / 1000)
-    in
-        WebGL.toHtml
-            [ width 400
-            , height 400
-            , style "display" "block"
-            ]
-        [ WebGL.entity
-              vertexShader
-              fragmentShader
-              pizzaCutterBladeMesh
-              { matrix = persp }
-        , WebGL.entity
-            vertexShader
-                fragmentShader
-                    pizzaCutterHandleMesh
-                    { matrix =
-                          Mat4.mul
-                          persp
-                          (Mat4.makeRotate (sin <| model.time / 700) (vec3 0 0 1))
-                    }
+    WebGL.toHtml
+        [ width 400
+        , height 400
+        , style "display" "block"
         ]
+    [ WebGL.entity
+            vertexShader
+            fragmentShader
+            pizzaCutterBladeMesh
+            { matrix = perspective model }
+    , WebGL.entity
+        vertexShader
+            fragmentShader
+                pizzaCutterHandleMesh
+                { matrix = perspective model }
+    ]
 
-
-perspective : Float -> Mat4
-perspective t =
+perspective : Model -> Mat4
+perspective m =
     Mat4.mul
         (Mat4.makePerspective 45 1 0.01 100)
-        (Mat4.makeLookAt (vec3 (4 * cos t) 0 (4 * sin t)) (vec3 0 0 0) (vec3 0 1 0))
+        (Mat4.makeLookAt
+             (vec3 (4 * cos m.theta) 0 (4 * sin m.theta)) -- eye
+             (vec3 0 0 0) -- center
+             (vec3 0 1 0)) -- up
 
 
 
