@@ -50,21 +50,29 @@ main =
 
 view : Model -> Html msg
 view model =
-    WebGL.toHtml
-        [ width 400
-        , height 400
-        , style "display" "block"
-        ]
+    let
+        persp =
+            perspective (model.time / 1000)
+    in
+        WebGL.toHtml
+            [ width 400
+            , height 400
+            , style "display" "block"
+            ]
         [ WebGL.entity
-            vertexShader
-            fragmentShader
-            pizzaCutterBladeMesh
-            { perspective = perspective (model.time / 1000) }
+              vertexShader
+              fragmentShader
+              pizzaCutterBladeMesh
+              { matrix = persp }
         , WebGL.entity
             vertexShader
-            fragmentShader
-            pizzaCutterHandleMesh
-            { perspective = perspective (model.time / 1000) }
+                fragmentShader
+                    pizzaCutterHandleMesh
+                    { matrix =
+                          Mat4.mul
+                          persp
+                          (Mat4.makeRotate (sin <| model.time / 700) (vec3 0 0 1))
+                    }
         ]
 
 
@@ -123,7 +131,7 @@ pizzaCutterHandleMesh =
             ]
 
         handleAttributes =
-            handlePositions -0.1 ++ handlePositions 2
+            handlePositions -0.2 ++ handlePositions 2
                 |> List.map (\pos -> Vertex pos (vec3 0.4 0.4 0.3))
 
         handleIndices =
@@ -148,7 +156,7 @@ pizzaCutterHandleMesh =
 
 
 type alias Uniforms =
-    { perspective : Mat4 }
+    { matrix : Mat4 }
 
 
 vertexShader : Shader Vertex Uniforms { vcolor : Vec3 }
@@ -157,11 +165,11 @@ vertexShader =
 
         attribute vec3 position;
         attribute vec3 color;
-        uniform mat4 perspective;
+        uniform mat4 matrix;
         varying vec3 vcolor;
 
         void main () {
-            gl_Position = perspective * vec4(position, 1.0);
+            gl_Position = matrix * vec4(position, 1.0);
             vcolor = color;
         }
 
