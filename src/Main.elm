@@ -58,7 +58,12 @@ view model =
         [ WebGL.entity
             vertexShader
             fragmentShader
-            pizzaCutterMesh
+            pizzaCutterBladeMesh
+            { perspective = perspective (model.time / 1000) }
+        , WebGL.entity
+            vertexShader
+            fragmentShader
+            pizzaCutterHandleMesh
             { perspective = perspective (model.time / 1000) }
         ]
 
@@ -100,11 +105,45 @@ circleVertexPositions radius numberOfSegments =
         (List.range 0 numberOfSegments)
 
 
-pizzaCutterMesh : Mesh Vertex
-pizzaCutterMesh =
+pizzaCutterBladeMesh : Mesh Vertex
+pizzaCutterBladeMesh =
     circleVertexPositions 1 32
         |> List.map (\pos -> Vertex pos (vec3 0.5 0.5 0.5))
         |> WebGL.triangleFan
+
+
+pizzaCutterHandleMesh : Mesh Vertex
+pizzaCutterHandleMesh =
+    let
+        handlePositions y =
+            [ vec3 -0.1 y -0.1 -- bottom 0, top 4
+            , vec3 0.1 y -0.1  -- bottom 1, top 5
+            , vec3 -0.1 y 0.1  -- bottom 2, top 6
+            , vec3 0.1 y 0.1   -- bottom 3, top 7
+            ]
+
+        handleAttributes =
+            handlePositions -0.1 ++ handlePositions 2
+                |> List.map (\pos -> Vertex pos (vec3 0.4 0.4 0.3))
+
+        handleIndices =
+            [ ( 0, 1, 2 ) -- bottom
+            , ( 1, 3, 2 )
+            , ( 4, 5, 6 ) -- top
+            , ( 5, 7, 6 )
+            , ( 0, 1, 4 ) -- zmin side
+            , ( 1, 4, 5 )
+            , ( 2, 3, 6 ) -- zmax side
+            , ( 3, 6, 7 )
+            , ( 0, 2, 4 ) -- xmin side
+            , ( 2, 4, 6 )
+            , ( 1, 3, 5 ) -- xmax side
+            , ( 3, 5, 7 )
+            ]
+    in
+        WebGL.indexedTriangles handleAttributes handleIndices
+
+
 -- Shaders
 
 
