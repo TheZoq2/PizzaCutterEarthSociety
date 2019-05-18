@@ -157,7 +157,7 @@ main =
 
 
 bladeMatrix : Float -> Mat4
-bladeMatrix time = Mat4.makeRotate (time / 1000) (vec3 0 0 1)
+bladeMatrix time = Mat4.makeRotate (time / Config.angularDivider / 1000) (vec3 0 0 1)
 
 
 view : Model -> Html Msg
