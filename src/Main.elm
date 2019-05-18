@@ -57,7 +57,8 @@ update message model =
                             perspectiveMatrix
                             viewportSize
 
-                        (intersected, point) = intersections (x, y) params [triangle]
+                        (intersected, point)
+                            = intersections (x, y) params pizzaCutterBladePositions
 
                         _ = Debug.log "Hit: " intersected
                     in
@@ -196,21 +197,31 @@ pointerMesh =
           )
         ]
 
-circleVertexPositions : Float -> Int -> List Vec3
+circleVertexPositions : Float -> Int -> List (Vec3, Vec3, Vec3)
 circleVertexPositions radius numberOfSegments =
-    [ vec3 0 0 0
-    ] ++
     List.map
-        (\i -> let angle = turns (toFloat i / toFloat numberOfSegments)
-               in vec3 (cos angle) (sin angle) 0)
+        (\i -> let angle toAdd = turns (toFloat (i + toAdd) / toFloat numberOfSegments)
+               in ( vec3 0 0 0
+                  , vec3 (cos <| angle 0) (sin <| angle 0) 0
+                  , vec3 (cos <| angle 1) (sin <| angle 1) 0
+                  )
+        )
         (List.range 0 numberOfSegments)
 
 
+pizzaCutterBladePositions =
+    circleVertexPositions 1 32
+
 pizzaCutterBladeMesh : Mesh Vertex
 pizzaCutterBladeMesh =
-    circleVertexPositions 1 32
-        |> List.map (\pos -> Vertex pos (vec3 0 0 -1) (vec3 0.5 0.5 0.5))
-        |> WebGL.triangleFan
+    pizzaCutterBladePositions
+        |> List.map (\(pos1, pos2, pos3) ->
+                ( Vertex pos1 (vec3 0 0 -1) (vec3 0.5 0.5 0.5)
+                , Vertex pos2 (vec3 0 0 -1) (vec3 0.5 0.5 0.5)
+                , Vertex pos3 (vec3 0 0 -1) (vec3 0.5 0.5 0.5)
+                )
+            )
+        |> WebGL.triangles
 
 
 pizzaCutterHandleMesh : Mesh Vertex
