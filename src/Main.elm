@@ -102,6 +102,9 @@ view model =
         , height 400
         , style "display" "block"
         , style "background-color" "black"
+        , style "position" "absolute"
+        , style "top" "0"
+        , style "left" "0"
         ]
         [ WebGL.entityWith
             settings
