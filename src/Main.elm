@@ -57,8 +57,18 @@ update message model =
                             perspectiveMatrix
                             viewportSize
 
+                        triangles =
+                            List.map
+                                (\(a, b, c) ->
+                                    ( Mat4.transform (bladeMatrix model.time) a
+                                    , Mat4.transform (bladeMatrix model.time) b
+                                    , Mat4.transform (bladeMatrix model.time) c
+                                    )
+                                )
+                                pizzaCutterVertices
+
                         (intersected, point)
-                            = intersections (x, y) params pizzaCutterBladePositions
+                            = intersections (x, y) params triangles
 
                         _ = Debug.log "Hit: " intersected
                     in
@@ -92,6 +102,9 @@ main =
         }
 
 
+bladeMatrix : Float -> Mat4
+bladeMatrix time = Mat4.makeRotate (time / 1000) (vec3 0 0 1)
+
 view : Model -> Html msg
 view model =
     let
@@ -111,9 +124,11 @@ view model =
             vertexShader
             fragmentShader
             pizzaCutterBladeMesh
-            { modelViewProjection = perspective model.theta
-            , modelMatrix = Mat4.identity
-            }
+            ( let rotation = bladeMatrix model.time
+              in { modelViewProjection = Mat4.mul (perspective model.theta) rotation
+                 , modelMatrix = rotation
+                 }
+            )
         , WebGL.entityWith
             settings
             vertexShader
@@ -200,8 +215,8 @@ pointerMesh =
           )
         ]
 
-circleVertexPositions : Float -> Int -> List (Vec3, Vec3, Vec3)
-circleVertexPositions radius numberOfSegments =
+circleVertices : Float -> Int -> List (Vec3, Vec3, Vec3)
+circleVertices radius numberOfSegments =
     List.map
         (\i -> let angle toAdd = turns (toFloat (i + toAdd) / toFloat numberOfSegments)
                in ( vec3 0 0 0
@@ -212,12 +227,12 @@ circleVertexPositions radius numberOfSegments =
         (List.range 0 numberOfSegments)
 
 
-pizzaCutterBladePositions =
-    circleVertexPositions 1 32
+pizzaCutterVertices =
+    circleVertices 1 16
 
 pizzaCutterBladeMesh : Mesh Vertex
 pizzaCutterBladeMesh =
-    pizzaCutterBladePositions
+    pizzaCutterVertices
         |> List.map (\(pos1, pos2, pos3) ->
                 ( Vertex pos1 (vec3 0 0 -1) (vec3 0.5 0.5 0.5)
                 , Vertex pos2 (vec3 0 0 -1) (vec3 0.5 0.5 0.5)
