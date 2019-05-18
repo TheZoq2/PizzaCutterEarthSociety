@@ -373,7 +373,7 @@ fragmentShader =
         void main () {
             vec3 normal = normalize(worldNormal);
             float lightFactor = clamp(dot(normal, lightDir), 0.0, 1.0);
-            gl_FragColor = ambientLight + lightFactor * vec4(vcolor, 1.0);
+            gl_FragColor = vec4((ambientLight + lightFactor) * vcolor, 1.0);
         }
 
     |]
@@ -420,7 +420,7 @@ texturedFragmentShader =
         void main () {
             vec3 normal = normalize(worldNormal);
             float lightFactor = clamp(dot(normal, lightDir), 0.0, 1.0);
-            gl_FragColor = ambientLight + lightFactor * texture2D(tex, vTexCoords);
+            gl_FragColor = vec4(ambientLight + lightFactor * texture2D(tex, vTexCoords).rgb, 1);
         }
 
     |]
