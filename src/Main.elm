@@ -25,7 +25,7 @@ import Model exposing (Model)
 import Msg exposing (Msg (..))
 
 import Key
-import Camera
+import Camera exposing (Camera, lookAtMatrix, cameraPos)
 
 viewportSize : (Int, Int)
 viewportSize = (400, 400)
@@ -36,6 +36,7 @@ init = { time = 0
        , theta = 3.0
        , intersections = []
        , mousePos = Nothing
+       , camera = Camera (vec3 0 0 0) (vec3 1 0 0) 1 (vec3 0 0 -1)
        }
 
 
@@ -45,7 +46,7 @@ update message model =
         next_model =
             case message of
                 Tick elapsed -> { model | time  = model.time + elapsed }
-                TimeDelta d  -> { model | theta = model.theta + Camera.posDelta model.keys d }
+                TimeDelta d  -> { model | camera = Camera.update (bladeMatrix model.time) model.keys model.camera }
                 KeyChange status str -> { model | keys = Key.update str status model.keys }
                 MouseDown x y ->
                     { model | intersections = cutterMouseIntersections model (x, y) }
@@ -58,11 +59,11 @@ update message model =
 cutterMouseIntersections : Model -> (Int, Int) -> List Vec3
 cutterMouseIntersections model (x, y) =
     let
-        t = model.theta
+        cam = model.camera
 
-        invertedViewMatrix = (Mat4.inverseOrthonormal <| lookAtMatrix t)
+        invertedViewMatrix = (Mat4.inverseOrthonormal <| lookAtMatrix cam)
         params = CameraParameters
-            (cameraPos t)
+            (cameraPos cam)
             invertedViewMatrix
             perspectiveMatrix
             viewportSize
@@ -88,6 +89,9 @@ worldCoordInBlade : Mat4 -> Vec3 -> Vec3
 worldCoordInBlade bladeMat worldCoord =
     Mat4.transform (Maybe.withDefault Mat4.identity <| Mat4.inverse bladeMat) worldCoord
 
+bladeCoordInWorld : Mat4 -> Vec3 -> Vec3
+bladeCoordInWorld bladeMat bladeCoord =
+    Mat4.transform bladeMat bladeCoord
 
 mouseDecoder : (Int -> Int -> Msg) -> D.Decoder Msg
 mouseDecoder msg =
@@ -142,7 +146,7 @@ view model =
                 vertexShader
                 fragmentShader
                 mesh
-                { modelViewProjection = Mat4.mul (perspective model.theta) modelMatrix
+                { modelViewProjection = Mat4.mul (perspective model.camera) modelMatrix
                 , modelMatrix = modelMatrix
                 }
 
@@ -168,28 +172,19 @@ view model =
           discObjects
         )
 
-cameraPos : Float -> Vec3
-cameraPos t = vec3 (4 * cos t) 0 (4 * sin t)
-
-lookAtMatrix : Float -> Mat4
-lookAtMatrix t =
-    (Mat4.makeLookAt
-         (cameraPos t) -- eye
-         (vec3 0 0 0) -- center
-         (vec3 0 1 0)) -- up
+-- cameraPos : Float -> Vec3
+-- cameraPos t = vec3 (4 * cos t) 0 (4 * sin t)
 
 perspectiveMatrix : Mat4
 perspectiveMatrix = Mat4.makePerspective 45 1 0.01 50
 
 -- TODO: Rename to avoid conflicts with perspectiveMatrix, or rename perspectiveMatrix
 -- to projection
-perspective : Float -> Mat4
-perspective t =
+perspective : Camera -> Mat4
+perspective camera =
     Mat4.mul
-        (perspectiveMatrix)
-        (lookAtMatrix (t))
-
-
+        perspectiveMatrix
+        (lookAtMatrix camera)
 
 
 -- Shaders
