@@ -448,12 +448,12 @@ fragmentShader =
         varying vec3 worldPosition;
         varying vec3 worldNormal;
 
-        const vec3 lightDir = vec3(1.0 / sqrt(3.0));
-        const float ambientLight = 0.1;
+        const vec3 lightDir = vec3(1.0, -1.0, 1.0);
+        const float ambientLight = 0.2;
 
         void main () {
             vec3 normal = normalize(worldNormal);
-            float lightFactor = clamp(dot(normal, lightDir), 0.0, 1.0);
+            float lightFactor = clamp(dot(normal, normalize(lightDir)), 0.0, 1.0);
             gl_FragColor = vec4((ambientLight + lightFactor) * vcolor, 1.0);
         }
 
@@ -495,12 +495,12 @@ texturedFragmentShader =
         varying vec3 worldNormal;
         uniform sampler2D tex;
 
-        const vec3 lightDir = vec3(1.0 / sqrt(3.0));
-        const float ambientLight = 0.1;
+        const vec3 lightDir = vec3(1.0, -1.0, 1.0);
+        const float ambientLight = 0.2;
 
         void main () {
             vec3 normal = normalize(worldNormal);
-            float lightFactor = clamp(dot(normal, lightDir), 0.0, 1.0);
+            float lightFactor = clamp(dot(normal, normalize(lightDir)), 0.0, 1.0);
             gl_FragColor = vec4(ambientLight + lightFactor * texture2D(tex, vTexCoords).rgb, 1);
         }
 
