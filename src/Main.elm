@@ -163,7 +163,7 @@ view model =
                     settings
                     vertexShader
                     fragmentShader
-                    pointerMesh
+                    (cubeMesh (vec3 0.1 0.1 0.2) (vec3 1 0 0))
                     (let modelMatrix = Mat4.mul (bladeMatrix model.time) (Mat4.makeTranslate point)
                      in { modelViewProjection = Mat4.mul (perspective model.theta) modelMatrix
                         , modelMatrix = modelMatrix
@@ -311,6 +311,9 @@ cubeIndices =
         (\i -> [ ( i, i + 1, i + 2 ), ( i + 1, i + 3, i + 2 ) ])
         (List.map (\i -> i*4) <| List.range 0 5)
 
+cubeMesh : Vec3 -> Vec3 -> Mesh Vertex
+cubeMesh size color =
+    WebGL.indexedTriangles (cubeVertices size color) cubeIndices
 
 pizzaCutterHandleMesh : Mesh Vertex
 pizzaCutterHandleMesh =
