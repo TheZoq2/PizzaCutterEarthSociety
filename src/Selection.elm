@@ -13,7 +13,7 @@ type alias CameraParameters =
     }
 
 
-intersections : (Int, Int) -> CameraParameters -> List (Vec3, Vec3, Vec3) -> (Bool, Vec3)
+intersections : (Int, Int) -> CameraParameters -> List (Vec3, Vec3, Vec3) -> List Vec3
 intersections mousePos cameraParameters triangles =
     let
         {cameraPosition, invertedViewMatrix, perspective} =
@@ -28,31 +28,23 @@ intersections mousePos cameraParameters triangles =
         direction =
             Vec3.direction destination origin
 
-        isClicked =
-            isCubeClicked origin direction triangles
+        clickedLocations =
+            triangleClickPosition origin direction triangles
     in
-        (isClicked, destination)
+        clickedLocations
 
 
-isCubeClicked : Vec3 -> Vec3 -> List ( Vec3, Vec3, Vec3 ) -> Bool
-isCubeClicked origin destination list =
+triangleClickPosition : Vec3 -> Vec3 -> List ( Vec3, Vec3, Vec3 ) -> List Vec3
+triangleClickPosition origin destination list =
     let
         intersect =
             rayTriangleIntersect origin destination
     in
-        List.any
+        List.filterMap
             (\triangle ->
                 intersect triangle
-                    |> (\m ->
-                            case m of
-                                Nothing ->
-                                    False
-
-                                Just _ ->
-                                    True
-                       )
             )
-        list
+            list
 
 
 

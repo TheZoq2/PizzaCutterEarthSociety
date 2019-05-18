@@ -33,7 +33,7 @@ init : Model
 init = { time = 0
        , keys = Dict.empty
        , theta = 3.0
-       , pointer = (vec3 0 0 0)
+       , intersections = []
        }
 
 
@@ -58,13 +58,31 @@ update message model =
                             perspectiveMatrix
                             viewportSize
 
-                        (intersected, point)
-                            = intersections (x, y) params pizzaCutterBladePositions
+                        bladeMat = (bladeMatrix model.time)
+                        triangles =
+                            List.map
+                                (\(a, b, c) ->
+                                    ( Mat4.transform bladeMat a
+                                    , Mat4.transform bladeMat b
+                                    , Mat4.transform bladeMat c
+                                    )
+                                )
+                                pizzaCutterVertices
 
-                        _ = Debug.log "Hit: " intersected
+                        rayHits =
+                            intersections (x, y) params triangles
+                            |> List.map (worldCoordInBlade bladeMat)
+
+                        _ = Debug.log "Amount hit: " (List.length rayHits)
                     in
-                        { model | pointer = point }
+                        { model | intersections = rayHits }
     in (next_model, Cmd.none)
+
+
+
+worldCoordInBlade : Mat4 -> Vec3 -> Vec3
+worldCoordInBlade bladeMat worldCoord =
+    Mat4.transform (Maybe.withDefault Mat4.identity <| Mat4.inverse bladeMat) worldCoord
 
 
 mouseDecoder : D.Decoder Msg
@@ -93,6 +111,9 @@ main =
         }
 
 
+bladeMatrix : Float -> Mat4
+bladeMatrix time = Mat4.makeRotate (time / 1000) (vec3 0 0 1)
+
 view : Model -> Html msg
 view model =
     let
@@ -114,16 +135,18 @@ view model =
         , style "background-color" "white"
         , style "position" "absolute"
         , style "top" "0"
-        , style "left" "0"
-        ]
+        ,style "left" "0"
+        ] <|
         [ WebGL.entityWith
             settings
             vertexShader
             fragmentShader
             pizzaCutterBladeMesh
-            { modelViewProjection = perspective model.theta
-            , modelMatrix = Mat4.identity
-            }
+            ( let rotation = bladeMatrix model.time
+              in { modelViewProjection = Mat4.mul (perspective model.theta) rotation
+                 , modelMatrix = rotation
+                 }
+            )
         , WebGL.entityWith
             settings
             vertexShader
@@ -132,24 +155,20 @@ view model =
             { modelViewProjection = perspective model.theta
             , modelMatrix = Mat4.identity
             }
-        , WebGL.entityWith
-            settings
-            vertexShader
-            fragmentShader
-            mesh
-            { modelViewProjection = perspective model.theta
-            , modelMatrix = Mat4.identity
-            }
-        , WebGL.entityWith
-            settings
-            vertexShader
-            fragmentShader
-            pointerMesh
-            (let translation = Mat4.makeTranslate model.pointer
-             in { modelViewProjection = Mat4.mul (perspective model.theta) translation
-                , modelMatrix = translation
-                })
-        ]
+        ] ++
+        List.map (\point ->
+                ( WebGL.entityWith
+                    settings
+                    vertexShader
+                    fragmentShader
+                    pointerMesh
+                    (let modelMatrix = Mat4.mul (bladeMatrix model.time) (Mat4.makeTranslate point)
+                     in { modelViewProjection = Mat4.mul (perspective model.theta) modelMatrix
+                        , modelMatrix = modelMatrix
+                        })
+                )
+            )
+            model.intersections
 
 cameraPos : Float -> Vec3
 cameraPos t = vec3 (4 * cos t) 0 (4 * sin t)
@@ -210,24 +229,24 @@ pointerMesh =
           )
         ]
 
-circleVertexPositions : Float -> Int -> List (Vec3, Vec3, Vec3)
-circleVertexPositions radius numberOfSegments =
+circleVertices : Float -> Int -> List (Vec3, Vec3, Vec3)
+circleVertices radius numberOfSegments =
     List.map
         (\i -> let angle toAdd = turns (toFloat (i + toAdd) / toFloat numberOfSegments)
                in ( vec3 0 0 0
-                  , vec3 (cos <| angle 0) (sin <| angle 0) 0
                   , vec3 (cos <| angle 1) (sin <| angle 1) 0
+                  , vec3 (cos <| angle 0) (sin <| angle 0) 0
                   )
         )
         (List.range 0 numberOfSegments)
 
 
-pizzaCutterBladePositions =
-    circleVertexPositions 1 32
+pizzaCutterVertices =
+    circleVertices 1 16
 
 pizzaCutterBladeMesh : Mesh Vertex
 pizzaCutterBladeMesh =
-    pizzaCutterBladePositions
+    pizzaCutterVertices
         |> List.map (\(pos1, pos2, pos3) ->
                 ( Vertex pos1 (vec3 0 0 1) (vec3 0.5 0.5 0.5)
                 , Vertex pos2 (vec3 0 0 1) (vec3 0.5 0.5 0.5)
