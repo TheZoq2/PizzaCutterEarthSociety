@@ -6,4 +6,5 @@ type Msg
     = Tick Float
     | KeyChange Key.Status String
     | TimeDelta Float
+    | MouseDown Int Int
 
