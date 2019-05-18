@@ -11,6 +11,7 @@ import Browser.Events exposing (onAnimationFrameDelta, onMouseDown)
 import Html exposing (Html)
 import Html.Attributes exposing (width, height, style)
 import WebGL exposing (Mesh, Shader)
+import WebGL.Settings as Settings
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector3 as Vec3 exposing (vec3, Vec3)
 import Json.Decode as D exposing (Value)
@@ -85,28 +86,35 @@ main =
 
 view : Model -> Html msg
 view model =
+    let
+        settings = [Settings.cullFace Settings.back]
+    in
     WebGL.toHtml
         [ width 400
         , height 400
         , style "display" "block"
         , style "background-color" "black"
         ]
-        [ WebGL.entity
+        [ WebGL.entityWith
+                settings
                 vertexShader
                 fragmentShader
                 pizzaCutterBladeMesh
                 { matrix = perspective model.theta, objectPosition = (vec3 0 0 0) }
-        , WebGL.entity
+        , WebGL.entityWith
+            settings
             vertexShader
             fragmentShader
             pizzaCutterHandleMesh
             { matrix = perspective model.theta, objectPosition = (vec3 0 0 0) }
-        , WebGL.entity
+        , WebGL.entityWith
+            settings
             vertexShader
             fragmentShader
             mesh
             { matrix = perspective model.theta, objectPosition = (vec3 0 0 0) }
-        , WebGL.entity
+        , WebGL.entityWith
+            settings
             vertexShader
             fragmentShader
             pointerMesh
