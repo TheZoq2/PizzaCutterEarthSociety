@@ -30,15 +30,15 @@ rotate : Vec3 -> Vec3
 rotate v = vec3 (Vec3.getY v) -(Vec3.getX v) (Vec3.getZ v)
 
 f : Vec3 -> String -> Input -> Input
-f v s d =
-    case s of
-        "KeyS" -> { d | move = Vec3.negate v }
-        "KeyD" -> { d | move = Vec3.negate <| rotate v }
-        "KeyW" -> { d | move = v }
-        "KeyA" -> { d | move = rotate v }
+f forward keyname d =
+    case keyname of
+        "KeyS" -> { d | move = Vec3.negate forward }
+        "KeyD" -> { d | move = Vec3.negate <| rotate forward }
+        "KeyW" -> { d | move = forward }
+        "KeyA" -> { d | move = rotate forward }
 
-        "KeyC" -> { d | lookMove = Vec3.negate v }
-        "KeyV" -> { d | lookMove = v }
+        "KeyC" -> { d | lookMove = Vec3.negate forward }
+        "KeyV" -> { d | lookMove = forward }
         "KeyJ" -> { d | lookRotate = 0.1 }
         "KeyP" -> { d | lookRotate = -0.1}
 
@@ -52,13 +52,15 @@ update : Set String -> Camera -> Camera
 update set camera =
     let v   = Vec3.sub camera.lookAt camera.base
         inp = Set.foldl (f <| Vec3.scale Config.cameraPanSpeed <| Vec3.normalize v) inputBase set
+        newheight = camera.height + inp.height
+        new_v = Vec3.sub v <| Vec3.scale (newheight / camera.height) v
     in { camera
-           | base = Vec3.add camera.base inp.move
+           | base = Vec3.add camera.base <| Vec3.add inp.move new_v
            , lookAt = Vec3.add camera.base
                       <| Mat4.transform (Mat4.makeRotate inp.lookRotate <| vec3 0 0 -1)
                       <| Vec3.add inp.lookMove
                       <| Vec3.add inp.move v
-           , height = camera.height + inp.height
+           , height = newheight
        }
 
 
