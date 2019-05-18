@@ -27,8 +27,8 @@ import Msg exposing (Msg (..))
 import Key
 import Camera
 
-viewportSize : (Int, Int)
-viewportSize = (400, 400)
+viewportSize : {width : Int, height : Int}
+viewportSize = {width = 400, height = 400}
 
 init : Model
 init = { time = 0
@@ -65,7 +65,7 @@ cutterMouseIntersections model (x, y) =
             (cameraPos t)
             invertedViewMatrix
             perspectiveMatrix
-            viewportSize
+            (viewportSize.width, viewportSize.height)
 
         bladeMat = (bladeMatrix model.time)
         triangles =
@@ -154,8 +154,8 @@ view model =
                 |> List.map (renderMesh (cubeMesh (vec3 0.05 0.05 0.2) (vec3 1 0 0)))
 
     in WebGL.toHtmlWith options
-        [ width 400
-        , height 400
+        [ width viewportSize.width
+        , height viewportSize.height
         , style "display" "block"
         , style "background-color" "white"
         , style "position" "absolute"
