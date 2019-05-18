@@ -57,23 +57,31 @@ update message model =
                             perspectiveMatrix
                             viewportSize
 
+                        bladeMat = (bladeMatrix model.time)
                         triangles =
                             List.map
                                 (\(a, b, c) ->
-                                    ( Mat4.transform (bladeMatrix model.time) a
-                                    , Mat4.transform (bladeMatrix model.time) b
-                                    , Mat4.transform (bladeMatrix model.time) c
+                                    ( Mat4.transform bladeMat a
+                                    , Mat4.transform bladeMat b
+                                    , Mat4.transform bladeMat c
                                     )
                                 )
                                 pizzaCutterVertices
 
-                        rayHits
-                            = intersections (x, y) params triangles
+                        rayHits =
+                            intersections (x, y) params triangles
+                            |> List.map (worldCoordInBlade bladeMat)
 
                         _ = Debug.log "Amount hit: " (List.length rayHits)
                     in
                         { model | intersections = rayHits }
     in (next_model, Cmd.none)
+
+
+
+worldCoordInBlade : Mat4 -> Vec3 -> Vec3
+worldCoordInBlade bladeMat worldCoord =
+    Mat4.transform (Maybe.withDefault Mat4.identity <| Mat4.inverse bladeMat) worldCoord
 
 
 mouseDecoder : D.Decoder Msg
@@ -137,14 +145,6 @@ view model =
             { modelViewProjection = perspective model.theta
             , modelMatrix = Mat4.identity
             }
-        , WebGL.entityWith
-            settings
-            vertexShader
-            fragmentShader
-            mesh
-            { modelViewProjection = perspective model.theta
-            , modelMatrix = Mat4.identity
-            }
         ] ++
         List.map (\point ->
                 ( WebGL.entityWith
@@ -152,9 +152,9 @@ view model =
                     vertexShader
                     fragmentShader
                     pointerMesh
-                    (let translation = Mat4.makeTranslate point
-                     in { modelViewProjection = Mat4.mul (perspective model.theta) translation
-                        , modelMatrix = translation
+                    (let modelMatrix = Mat4.mul (bladeMatrix model.time) (Mat4.makeTranslate point)
+                     in { modelViewProjection = Mat4.mul (perspective model.theta) modelMatrix
+                        , modelMatrix = modelMatrix
                         })
                 )
             )
