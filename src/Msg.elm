@@ -7,4 +7,5 @@ type Msg
     | KeyChange Key.Status String
     | TimeDelta Float
     | MouseDown Int Int
+    | MouseMove Int Int
 

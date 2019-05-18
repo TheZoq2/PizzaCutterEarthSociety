@@ -5,7 +5,7 @@ module Main exposing (main)
 -}
 
 import Browser
-import Browser.Events exposing (onAnimationFrameDelta, onKeyUp, onKeyDown, onMouseDown)
+import Browser.Events exposing (onAnimationFrameDelta, onKeyUp, onKeyDown, onMouseDown, onMouseMove)
 
 import Browser.Events exposing (onAnimationFrameDelta, onMouseDown)
 import Html exposing (Html)
@@ -34,6 +34,7 @@ init = { time = 0
        , keys = Dict.empty
        , theta = 3.0
        , intersections = []
+       , mousePos = Nothing
        }
 
 
@@ -47,6 +48,8 @@ update message model =
                 KeyChange status str -> { model | keys = Key.update str status model.keys }
                 MouseDown x y ->
                     { model | intersections = cutterMouseIntersections model (x, y) }
+                MouseMove x y ->
+                    { model | mousePos = Just (x, y)}
     in (next_model, Cmd.none)
 
 
@@ -85,9 +88,9 @@ worldCoordInBlade bladeMat worldCoord =
     Mat4.transform (Maybe.withDefault Mat4.identity <| Mat4.inverse bladeMat) worldCoord
 
 
-mouseDecoder : D.Decoder Msg
-mouseDecoder =
-    D.map2 MouseDown (D.field "clientX" D.int) (D.field "clientY" D.int)
+mouseDecoder : (Int -> Int -> Msg) -> D.Decoder Msg
+mouseDecoder msg =
+    D.map2 msg (D.field "clientX" D.int) (D.field "clientY" D.int)
 
 
 subscriptions : Model -> Sub Msg
@@ -97,7 +100,8 @@ subscriptions model =
         , onKeyUp   <| Key.decoder KeyChange Key.Up
         , onKeyDown <| Key.decoder KeyChange Key.Down
         , onAnimationFrameDelta TimeDelta
-        , onMouseDown mouseDecoder
+        , onMouseDown <| mouseDecoder MouseDown
+        , onMouseMove <| mouseDecoder MouseMove
         ]
 
 

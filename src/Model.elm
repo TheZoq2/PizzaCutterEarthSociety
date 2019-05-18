@@ -9,4 +9,5 @@ type alias Model =
     , keys   : Dict String Key.Status
     , theta  : Float
     , intersections : List Vec3
+    , mousePos : Maybe (Int, Int)
     }
