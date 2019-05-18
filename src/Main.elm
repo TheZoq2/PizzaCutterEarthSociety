@@ -20,6 +20,10 @@ import Math.Vector3 as Vec3 exposing (vec3, Vec3)
 import Json.Decode as D exposing (Value)
 import Dict
 import Task
+import Selection exposing (intersections, CameraParameters)
+import Meshes exposing (..)
+
+import Set exposing (Set)
 
 import Meshes exposing (..)
 import Unit exposing (Unit, newUnit)
@@ -28,21 +32,21 @@ import Model exposing (Model, Selected(..), buildingName, allBuildings)
 import Msg exposing (Msg (..))
 import Key
 import Camera
+import Camera exposing (Camera, lookAtMatrix, cameraPos)
 import Config
 
 init : Model
 init =
     { time = 0
-    , keys = Dict.empty
+    , keys = Set.empty
     , textures = Dict.empty
-    , theta = 3.0
     , intersections = []
     , mousePos = Nothing
     , units = [newUnit (vec3 0.5 0 0), newUnit (vec3 0 0.5 0)]
     , cursor = Nothing
     , selected = Nothing
+       , camera = Camera (vec3 0 0 0) (vec3 0 0 0)
     }
-
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update message model =
@@ -58,8 +62,11 @@ update message model =
                                 (\pos -> List.head <| cutterMouseIntersections model pos)
                                 model.mousePos
                         }
-                TimeDelta d  -> { model | theta = model.theta + Camera.posDelta model.keys d }
-                KeyChange status str -> { model | keys = Key.update str status model.keys }
+                TimeDelta d  -> { model | camera = Camera.update model.keys model.camera }
+                KeyChange status str -> { model | keys =
+                                             case status of
+                                                 Key.Up -> Set.remove str model.keys
+                                                 Key.Down -> Set.insert str model.keys }
                 MouseDown event ->
                     case event.button of
                         Mouse.SecondButton -> onRightClick model
@@ -145,11 +152,11 @@ cutterMouseIntersections model (x, y) =
 mouseIntersections : List (Vec3, Vec3, Vec3) -> Vec3 -> Model -> (Int, Int) -> List Vec3
 mouseIntersections triangles position model (x, y) =
     let
-        t = model.theta
+        cam = model.camera
 
-        invertedViewMatrix = (Mat4.inverseOrthonormal <| lookAtMatrix t)
+        invertedViewMatrix = (Mat4.inverseOrthonormal <| lookAtMatrix cam)
         params = CameraParameters
-            (cameraPos t)
+            (cameraPos cam)
             invertedViewMatrix
             perspectiveMatrix
             Config.viewportSize
@@ -179,6 +186,9 @@ worldCoordInBlade : Mat4 -> Vec3 -> Vec3
 worldCoordInBlade bladeMat worldCoord =
     Mat4.transform (Maybe.withDefault Mat4.identity <| Mat4.inverse bladeMat) worldCoord
 
+bladeCoordInWorld : Mat4 -> Vec3 -> Vec3
+bladeCoordInWorld bladeMat bladeCoord =
+    Mat4.transform bladeMat bladeCoord
 
 mouseDecoder : (Int -> Int -> Msg) -> D.Decoder Msg
 mouseDecoder msg =
@@ -236,7 +246,7 @@ view model =
                 vertexShader
                 fragmentShader
                 mesh
-                { modelViewProjection = Mat4.mul (perspective model.theta) modelMatrix
+                { modelViewProjection = Mat4.mul (perspective model.camera) modelMatrix
                 , modelMatrix = modelMatrix
                 }
 
@@ -247,7 +257,7 @@ view model =
                 texturedVertexShader
                 texturedFragmentShader
                 mesh
-                { modelViewProjection = Mat4.mul (perspective model.theta) modelMatrix
+                { modelViewProjection = Mat4.mul (perspective model.camera) modelMatrix
                 , modelMatrix = modelMatrix
                 , tex = texture
                 }
@@ -324,28 +334,16 @@ buildMenu model =
                     allBuildings
         Nothing -> Html.div [] []
 
-cameraPos : Float -> Vec3
-cameraPos t = vec3 (4 * cos t) 0 (4 * sin t)
-
-lookAtMatrix : Float -> Mat4
-lookAtMatrix t =
-    (Mat4.makeLookAt
-         (cameraPos t) -- eye
-         (vec3 0 0 0) -- center
-         (vec3 0 1 0)) -- up
-
 perspectiveMatrix : Mat4
 perspectiveMatrix = Mat4.makePerspective 45 1 0.01 50
 
 -- TODO: Rename to avoid conflicts with perspectiveMatrix, or rename perspectiveMatrix
 -- to projection
-perspective : Float -> Mat4
-perspective t =
+perspective : Camera -> Mat4
+perspective camera =
     Mat4.mul
-        (perspectiveMatrix)
-        (lookAtMatrix (t))
-
-
+        perspectiveMatrix
+        (lookAtMatrix camera)
 
 
 -- Shaders
