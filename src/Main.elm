@@ -19,18 +19,16 @@ import Json.Decode as D exposing (Value)
 import Selection exposing (intersections, CameraParameters)
 import Html.Events.Extra.Mouse as Mouse
 import Meshes exposing (..)
-import Unit exposing (Unit)
+import Unit exposing (Unit, newUnit)
+import Config
 
 import Dict
 
-import Model exposing (Model)
+import Model exposing (Model, Selected(..))
 import Msg exposing (Msg (..))
 
 import Key
 import Camera
-
-viewportSize : (Int, Int)
-viewportSize = (400, 400)
 
 init : Model
 init = { time = 0
@@ -38,8 +36,9 @@ init = { time = 0
        , theta = 3.0
        , intersections = []
        , mousePos = Nothing
-       , units = [Unit (vec3 1 0 0) (vec3 0 0 0)]
+       , units = [newUnit (vec3 0.5 0 0), newUnit (vec3 0 0.5 0)]
        , cursor = Nothing
+       , selected = Nothing
        }
 
 
@@ -61,6 +60,7 @@ update message model =
                 KeyChange status str -> { model | keys = Key.update str status model.keys }
                 MouseDown event ->
                     case event.button of
+                        Mouse.MainButton -> onLeftClick model
                         Mouse.MiddleButton -> onRightClick model
                         _ -> model
                 MouseMove x y ->
@@ -68,6 +68,29 @@ update message model =
                         | mousePos = Just (x, y)
                     }
     in (next_model, Cmd.none)
+
+
+
+onLeftClick : Model -> Model
+onLeftClick model =
+    let
+        mousePos = Maybe.withDefault (0, 0) model.mousePos
+        selected =
+            List.filterMap (\(hit, index) -> if hit then Just index else Nothing)
+             <| List.indexedMap
+                (\index {position} ->
+                    ( mouseIntersections
+                        (Meshes.cubeTriangles Config.unitSize)
+                        position
+                        model
+                        mousePos
+                        |> List.isEmpty |> not
+                    , index
+                    )
+                )
+                model.units
+    in
+        { model | selected = Maybe.map SUnit <| List.head selected }
 
 
 
@@ -79,10 +102,21 @@ onRightClick model =
                 (\pos -> List.head <| cutterMouseIntersections model pos)
                 model.mousePos
 
+        selectedUnits = case model.selected of
+            Just (SUnit id) -> [id]
+            _ -> []
+
         newUnits =
             case goal of
                 Just goalUnwraped ->
-                    List.map (\unit -> {unit | goal = goalUnwraped}) model.units
+                    List.indexedMap
+                        (\index unit ->
+                            if List.member index selectedUnits then
+                                {unit | goal = goalUnwraped}
+                            else
+                                unit
+                        )
+                        model.units
                 Nothing -> model.units
     in
         {model | units = newUnits}
@@ -92,8 +126,19 @@ updateUnits : Float -> Model -> Model
 updateUnits elapsedTime model =
     {model | units = List.map (Unit.moveTowardsGoal elapsedTime) model.units}
 
+
 cutterMouseIntersections : Model -> (Int, Int) -> List Vec3
 cutterMouseIntersections model (x, y) =
+    let
+        triangles =
+                pizzaCutterVertices
+    in
+        mouseIntersections triangles (vec3 0 0 0) model (x, y)
+
+
+-- Checks for intersections with triangles on the board
+mouseIntersections : List (Vec3, Vec3, Vec3) -> Vec3 -> Model -> (Int, Int) -> List Vec3
+mouseIntersections triangles position model (x, y) =
     let
         t = model.theta
 
@@ -102,24 +147,28 @@ cutterMouseIntersections model (x, y) =
             (cameraPos t)
             invertedViewMatrix
             perspectiveMatrix
-            viewportSize
+            Config.viewportSize
 
-        bladeMat = (bladeMatrix model.time)
-        triangles =
+        fullMatrix = Mat4.mul (bladeMatrix model.time) (Mat4.makeTranslate position)
+
+        -- _ = Debug.log "fullMatrix" fullMatrix
+
+        translated =
             List.map
                 (\(a, b, c) ->
-                    ( Mat4.transform bladeMat a
-                    , Mat4.transform bladeMat b
-                    , Mat4.transform bladeMat c
+                    ( Mat4.transform fullMatrix a
+                    , Mat4.transform fullMatrix b
+                    , Mat4.transform fullMatrix c
                     )
                 )
-                pizzaCutterVertices
+                triangles
 
         rayHits =
-            intersections (x, y) params triangles
-            |> List.map (worldCoordInBlade bladeMat)
+            intersections (x, y) params translated
+            |> List.map (worldCoordInBlade fullMatrix)
     in
         rayHits
+
 
 worldCoordInBlade : Mat4 -> Vec3 -> Vec3
 worldCoordInBlade bladeMat worldCoord =
@@ -209,8 +258,8 @@ view model =
             { stopPropagation = True, preventDefault = True }
                 |> Mouse.onWithOptions "mousedown"
     in WebGL.toHtmlWith options
-        [ width 400
-        , height 400
+        [ width <| Tuple.first Config.viewportSize
+        , height <| Tuple.second Config.viewportSize
         , style "display" "block"
         , style "background-color" "white"
         , style "position" "absolute"
