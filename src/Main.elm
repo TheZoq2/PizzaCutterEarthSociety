@@ -6,10 +6,10 @@ module Main exposing (main)
 
 import Browser
 import Browser.Events exposing (onAnimationFrameDelta, onKeyUp, onKeyDown, onMouseDown, onMouseMove)
-
 import Browser.Events exposing (onAnimationFrameDelta, onMouseDown)
 import Html exposing (Html)
 import Html.Attributes exposing (width, height, style)
+import Html.Events.Extra.Mouse as Mouse
 import WebGL exposing (Mesh, Shader)
 import WebGL.Settings as Settings
 import WebGL.Settings.DepthTest as DepthTest
@@ -21,14 +21,14 @@ import Json.Decode as D exposing (Value)
 import Dict
 import Task
 
-import Selection exposing (intersections, CameraParameters)
 import Meshes exposing (..)
-
+import Unit exposing (Unit)
+import Selection exposing (intersections, CameraParameters)
 import Model exposing (Model)
 import Msg exposing (Msg (..))
-
 import Key
 import Camera
+import Config
 
 viewportSize : (Int, Int)
 viewportSize = (400, 400)
@@ -41,19 +41,31 @@ init =
     , theta = 3.0
     , intersections = []
     , mousePos = Nothing
+    , units = [Unit (vec3 1 0 0) (vec3 0 0 0)]
+    , cursor = Nothing
     }
-    
-    
+
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update message model =
     let
         next_model =
             case message of
-                Tick elapsed -> { model | time  = model.time + elapsed }
+                Tick elapsed ->
+                    updateUnits
+                        (elapsed / 1000)
+                        { model
+                            | time = model.time + elapsed
+                            , cursor = Maybe.andThen
+                                (\pos -> List.head <| cutterMouseIntersections model pos)
+                                model.mousePos
+                        }
                 TimeDelta d  -> { model | theta = model.theta + Camera.posDelta model.keys d }
                 KeyChange status str -> { model | keys = Key.update str status model.keys }
-                MouseDown x y ->
-                    { model | intersections = cutterMouseIntersections model (x, y) }
+                MouseDown event ->
+                    case event.button of
+                        Mouse.MiddleButton -> onRightClick model
+                        _ -> model
                 MouseMove x y ->
                     { model | mousePos = Just (x, y)}
                 TextureLoaded file (Ok texture) ->
@@ -64,6 +76,27 @@ update message model =
     in (next_model, Cmd.none)
 
 
+
+onRightClick : Model -> Model
+onRightClick model =
+    let
+        goal =
+            Maybe.andThen
+                (\pos -> List.head <| cutterMouseIntersections model pos)
+                model.mousePos
+
+        newUnits =
+            case goal of
+                Just goalUnwraped ->
+                    List.map (\unit -> {unit | goal = goalUnwraped}) model.units
+                Nothing -> model.units
+    in
+        {model | units = newUnits}
+
+
+updateUnits : Float -> Model -> Model
+updateUnits elapsedTime model =
+    {model | units = List.map (Unit.moveTowardsGoal elapsedTime) model.units}
 
 cutterMouseIntersections : Model -> (Int, Int) -> List Vec3
 cutterMouseIntersections model (x, y) =
@@ -103,6 +136,10 @@ mouseDecoder : (Int -> Int -> Msg) -> D.Decoder Msg
 mouseDecoder msg =
     D.map2 msg (D.field "clientX" D.int) (D.field "clientY" D.int)
 
+mouseDownDecoder : (Int -> Msg) -> D.Decoder Msg
+mouseDownDecoder msg =
+    D.map msg (D.field "button" D.int)
+
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -111,7 +148,6 @@ subscriptions model =
         , onKeyUp   <| Key.decoder KeyChange Key.Up
         , onKeyDown <| Key.decoder KeyChange Key.Down
         , onAnimationFrameDelta TimeDelta
-        , onMouseDown <| mouseDecoder MouseDown
         , onMouseMove <| mouseDecoder MouseMove
         ]
 
@@ -127,10 +163,10 @@ main =
 
 
 bladeMatrix : Float -> Mat4
-bladeMatrix time = Mat4.makeRotate (time / 1000) (vec3 0 0 1)
+bladeMatrix time = Mat4.makeRotate (time / Config.angularDivider / 1000) (vec3 0 0 1)
 
 
-view : Model -> Html msg
+view : Model -> Html Msg
 view model =
     let
         settings =
@@ -170,6 +206,7 @@ view model =
 
         bladeRotation = bladeMatrix model.time
 
+
         renderedBlade =
             case Dict.get "aluminium" model.textures of
               Just texture ->
@@ -177,11 +214,26 @@ view model =
               Nothing ->
                   []
 
-        discObjects =
-            model.intersections
-                |> List.map (\point -> Mat4.mul bladeRotation (Mat4.makeTranslate point))
-                |> List.map (renderMesh (cubeMesh (vec3 0.05 0.05 0.2) (vec3 1 0 0)))
+        cursor = 
+            case model.cursor of
+                Just pos ->
+                    [ renderMesh
+                        (cubeMesh (vec3 0.1 0.1 0.1) (vec3 0 1 0))
+                        (Mat4.mul bladeRotation (Mat4.makeTranslate pos))
+                    ]
+                Nothing -> []
 
+        discObjects =
+            cursor
+            ++
+            ( model.units
+                |> List.map (\{position} -> Mat4.mul bladeRotation (Mat4.makeTranslate position))
+                |> List.map (renderMesh (cubeMesh (vec3 0.05 0.05 0.2) (vec3 1 0 0)))
+            )
+
+        onDown =
+            { stopPropagation = True, preventDefault = True }
+                |> Mouse.onWithOptions "mousedown"
     in WebGL.toHtmlWith options
         [ width 400
         , height 400
@@ -190,6 +242,7 @@ view model =
         , style "position" "absolute"
         , style "top" "0"
         , style "left" "0"
+        , onDown MouseDown
         ]
         ( renderedBlade ++
           [ renderMesh pizzaCutterHandleMesh <| Mat4.makeTranslate3 0 1 0] ++
