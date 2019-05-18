@@ -8,6 +8,7 @@ import Browser
 import Browser.Events exposing (onAnimationFrameDelta, onKeyUp, onKeyDown, onMouseDown, onMouseMove)
 import Browser.Events exposing (onAnimationFrameDelta, onMouseDown)
 import Html exposing (Html)
+import Html.Events
 import Html.Attributes exposing (width, height, style)
 import Html.Events.Extra.Mouse as Mouse
 import WebGL exposing (Mesh, Shader)
@@ -26,7 +27,8 @@ import Set exposing (Set)
 import Meshes exposing (..)
 import Unit exposing (Unit, newUnit)
 import Selection exposing (intersections, CameraParameters)
-import Model exposing (Model, Selected(..))
+import Model exposing (Model, Selected(..), UnitTool(..))
+import Building exposing (buildingName, allBuildings, newBuilding)
 import Msg exposing (Msg (..))
 import Key
 import Camera exposing (Camera, lookAtMatrix, cameraPos)
@@ -42,7 +44,9 @@ init =
     , units = [newUnit (vec3 0.5 0 0), newUnit (vec3 0 0.5 0)]
     , cursor = Nothing
     , selected = Nothing
-    , camera = Camera (vec3 0 0 0) (vec3 0 0 0)
+    , buildings = Dict.empty
+    , nextBuildingId = 0
+    , camera = Camera (vec3 1 0 0) (vec3 0 0 0) 1
     }
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -51,8 +55,8 @@ update message model =
         next_model =
             case message of
                 Tick elapsed ->
-                    updateUnits
-                        (elapsed / 1000)
+                    updateBuildings (elapsed / 1000)
+                     <| updateUnits (elapsed / 1000)
                         { model
                             | time = model.time + elapsed
                             , cursor = Maybe.andThen
@@ -76,6 +80,12 @@ update message model =
                 TextureLoaded file err ->
                     let _ = Debug.log ("Could not load texture" ++ file) err
                     in model
+                OnBuildingButton kind ->
+                    case model.selected of
+                        Just (SUnit units _) ->
+                            { model | selected = Just (SUnit units (Just (Build kind)))}
+                        _ ->
+                            Debug.log "Warning: building button clicked without unit" model
     in (next_model, Cmd.none)
 
 
@@ -84,6 +94,19 @@ onLeftClick : Model -> Model
 onLeftClick model =
     let
         mousePos = Maybe.withDefault (0, 0) model.mousePos
+    in
+        case model.selected of
+            Nothing ->
+                trySelect mousePos model
+            Just (SUnit _ Nothing) ->
+                trySelect mousePos model
+            Just (SUnit units (Just (Build buildingKind))) ->
+                tryBuildBuilding mousePos buildingKind units model
+
+
+trySelect : (Int, Int) -> Model -> Model
+trySelect mousePos model =
+    let
         selected =
             List.filterMap (\(hit, index) -> if hit then Just index else Nothing)
              <| List.indexedMap
@@ -99,9 +122,45 @@ onLeftClick model =
                 )
                 model.units
     in
-        { model | selected = Maybe.map SUnit <| List.head selected }
+        { model | selected = Maybe.map (\id -> SUnit [id] Nothing) <| List.head selected }
+
+tryBuildBuilding : (Int, Int) -> Building.Kind -> List Int -> Model -> Model
+tryBuildBuilding mousePos kind units model =
+    let
+        pos = List.head <| cutterMouseIntersections model mousePos
+        id = model.nextBuildingId
+    in
+        case pos of
+            Just position ->
+                {model
+                    | buildings =
+                        Dict.insert id (newBuilding kind position) model.buildings
+                    , nextBuildingId = model.nextBuildingId + 1
+                    , selected = Nothing
+                    , units =
+                        commandSelectedUnits
+                            (Unit.BuildBuilding id)
+                            model.selected
+                            model.units
+                }
+            Nothing ->
+                model
 
 
+
+commandSelectedUnits : Unit.Goal -> Maybe Selected -> List Unit -> List Unit
+commandSelectedUnits goal selected units =
+    case selected of
+        Just (SUnit indices _) ->
+            List.indexedMap
+                (\i unit ->
+                    if List.member i indices then
+                        Unit.setGoal goal unit
+                    else
+                        unit
+                )
+                units
+        _ -> units
 
 onRightClick : Model -> Model
 onRightClick model =
@@ -112,7 +171,7 @@ onRightClick model =
                 model.mousePos
 
         selectedUnits = case model.selected of
-            Just (SUnit id) -> [id]
+            Just (SUnit indexes _) -> indexes
             _ -> []
 
         newUnits =
@@ -121,7 +180,7 @@ onRightClick model =
                     List.indexedMap
                         (\index unit ->
                             if List.member index selectedUnits then
-                                {unit | goal = goalUnwraped}
+                                {unit | goal = Unit.MoveTo goalUnwraped}
                             else
                                 unit
                         )
@@ -133,7 +192,48 @@ onRightClick model =
 
 updateUnits : Float -> Model -> Model
 updateUnits elapsedTime model =
-    {model | units = List.map (Unit.moveTowardsGoal elapsedTime) model.units}
+    {model | units = List.map (Unit.moveTowardsGoal elapsedTime model.buildings) model.units}
+
+
+updateBuildings : Float -> Model -> Model
+updateBuildings elapsedTime model =
+    let
+        buildingFn units index building =
+            let
+                -- Filter all buildings that 
+                buildingUnits =
+                    List.length
+                     <| List.filter
+                        (\{position, goal} ->
+                            let
+                                distance = Vec3.distance building.position position
+                            in
+                                (distance < Config.buildRadius)
+                                &&
+                                (goal == Unit.BuildBuilding index)
+                        )
+                        units
+
+                _ = Debug.log "buildingUnits" buildingUnits
+
+                status =
+                    case building.status of
+                        Building.Unbuilt progress ->
+                            if progress > 1 then
+                                Building.Done
+                            else
+                                Building.Unbuilt
+                                    (progress + (elapsedTime / Config.buildTime) * toFloat buildingUnits)
+                        a -> a
+            in
+                {building | status = status}
+
+        newBuildings =
+            Dict.map
+                (buildingFn model.units)
+                model.buildings
+    in
+        {model | buildings = newBuildings}
 
 
 cutterMouseIntersections : Model -> (Int, Int) -> List Vec3
@@ -308,6 +408,25 @@ view model =
                     ]
                 Nothing -> []
 
+        drawBuilding {position, kind, status} =
+            let
+                size = 0.1
+                color =
+                    case kind of
+                        Building.Green -> vec3 0 1 0
+                        Building.Blue -> vec3 0 0 1
+
+                fullPosition =
+                    case status of
+                        Building.Unbuilt progress ->
+                            Vec3.add position (vec3 0 0 ((1-progress) * size/2))
+                        _ ->
+                            position
+            in
+                renderMesh
+                    (cubeMesh (vec3 size size size) color)
+                    (Mat4.mul bladeRotation (Mat4.makeTranslate fullPosition))
+
         discObjects =
             cursor
             ++
@@ -315,6 +434,7 @@ view model =
                 |> List.map (\{position} -> Mat4.mul bladeRotation (Mat4.makeTranslate position))
                 |> List.map (renderMesh (cubeMesh (vec3 0.05 0.05 0.2) (vec3 1 0 0)))
             )
+            ++ (List.map drawBuilding <| Dict.values model.buildings)
 
         onDown =
             { stopPropagation = True, preventDefault = True }
@@ -324,28 +444,54 @@ view model =
             { stopPropagation = True, preventDefault = True }
                 |> Mouse.onWithOptions "contextmenu"
 
-    in WebGL.toHtmlWith options
-        [ width <| Tuple.first Config.viewportSize
-        , height <| Tuple.second Config.viewportSize
-        , style "display" "block"
-        , style "background-color" "white"
-        , style "position" "absolute"
+    in Html.div
+        [ style "position" "absolute"
         , style "top" "0"
         , style "left" "0"
-        , onDown MouseDown
-        , onContextMenu MouseDown
         ]
-        ( renderedBlade ++
-          [ renderMesh pizzaCutterHandleMesh <| Mat4.makeTranslate3 0 1 0
-          , renderMesh (cubeMesh (vec3 0.1 0.1 0.1) (vec3 1 1 1)) <| Mat4.makeTranslate model.camera.base
-          , renderMesh (cubeMesh (vec3 0.1 0.1 0.1) (vec3 0 0 0)) <| Mat4.makeTranslate model.camera.lookingAt
-          ] ++
-          discObjects ++
-          renderedNorway
-        )
+        <| [ WebGL.toHtmlWith options
+                [ width <| Tuple.first Config.viewportSize
+                , height <| Tuple.second Config.viewportSize
+                , style "display" "block"
+                , style "background-color" "white"
+                , onDown MouseDown
+                , onContextMenu MouseDown
+                ]
+                ( renderedBlade ++
+                  [ renderMesh pizzaCutterHandleMesh <| Mat4.makeTranslate3 0 1 0
+                  ] ++
+                  discObjects ++
+                  renderedNorway
+                )
+            ]
+            ++
+            [ buildMenu model
+            ]
+
+
+buildMenu : Model -> Html Msg
+buildMenu model =
+    let
+        buildingButton building =
+            Html.div
+                []
+                [Html.button
+                    [Html.Events.onClick (OnBuildingButton building)]
+                    [Html.text <| buildingName building]]
+    in
+    case model.selected of
+        Just (SUnit _ _) ->
+            -- Buildings
+            let _ = Debug.log "processing selected" "" in
+            Html.ul []
+                <| List.map
+                    buildingButton
+                    allBuildings
+        Nothing -> Html.div [] []
+
 
 perspectiveMatrix : Mat4
-perspectiveMatrix = Mat4.makePerspective 45 1 0.01 50
+perspectiveMatrix = Mat4.makePerspective 60 1 0.01 50
 
 -- TODO: Rename to avoid conflicts with perspectiveMatrix, or rename perspectiveMatrix
 -- to projection
@@ -402,12 +548,12 @@ fragmentShader =
         varying vec3 worldPosition;
         varying vec3 worldNormal;
 
-        const vec3 lightDir = vec3(1.0 / sqrt(3.0));
-        const float ambientLight = 0.1;
+        const vec3 lightDir = vec3(1.0, -1.0, 1.0);
+        const float ambientLight = 0.2;
 
         void main () {
             vec3 normal = normalize(worldNormal);
-            float lightFactor = clamp(dot(normal, lightDir), 0.0, 1.0);
+            float lightFactor = clamp(dot(normal, normalize(lightDir)), 0.0, 1.0);
             gl_FragColor = vec4((ambientLight + lightFactor) * vcolor, 1.0);
         }
 
@@ -449,12 +595,12 @@ texturedFragmentShader =
         varying vec3 worldNormal;
         uniform sampler2D tex;
 
-        const vec3 lightDir = vec3(1.0 / sqrt(3.0));
-        const float ambientLight = 0.1;
+        const vec3 lightDir = vec3(1.0, -1.0, 1.0);
+        const float ambientLight = 0.2;
 
         void main () {
             vec3 normal = normalize(worldNormal);
-            float lightFactor = clamp(dot(normal, lightDir), 0.0, 1.0);
+            float lightFactor = clamp(dot(normal, normalize(lightDir)), 0.0, 1.0);
             gl_FragColor = vec4(ambientLight + lightFactor * texture2D(tex, vTexCoords).rgb, 1);
         }
 
