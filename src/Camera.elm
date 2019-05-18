@@ -32,14 +32,14 @@ inputBase = { move = (vec3 0 0 0)
 
 f : String -> Input -> Input
 f s d = case s of
-            "KeyA" -> { d | move = (vec3  1 0 0) }
-            "KeyD" -> { d | move = (vec3 -1 0 0) }
-            "KeyW" -> { d | move = (vec3 0  1 0) }
-            "KeyS" -> { d | move = (vec3 0 -1 0) }
-            "KeyJ" -> { d | lookMove = (vec3  1 0 0) }
-            "KeyP" -> { d | lookMove = (vec3 -1 0 0) }
-            "KeyC" -> { d | lookMove = (vec3 0  1 0) }
-            "KeyV" -> { d | lookMove = (vec3 0 -1 0) }
+            "KeyA" -> { d | move = (vec3  0.1 0 0) }
+            "KeyD" -> { d | move = (vec3 -0.1 0 0) }
+            "KeyW" -> { d | move = (vec3 0  0.1 0) }
+            "KeyS" -> { d | move = (vec3 0 -0.1 0) }
+            "KeyJ" -> { d | lookMove = (vec3 -0.1 0 0) }
+            "KeyP" -> { d | lookMove = (vec3  0.1 0 0) }
+            "KeyC" -> { d | lookMove = (vec3 0  0.1 0) }
+            "KeyV" -> { d | lookMove = (vec3 0 -0.1 0) }
             _ -> d
 
 update : Set String -> Camera -> Camera
@@ -47,7 +47,7 @@ update set camera =
     let inp = Set.foldl f inputBase set
     in { camera
            | base = Vec3.add camera.base inp.move
-           , lookingAt = Vec3.add camera.lookingAt inp.lookMove
+           , lookingAt = Vec3.add inp.move <| Vec3.add camera.lookingAt inp.lookMove
        }
 
 
