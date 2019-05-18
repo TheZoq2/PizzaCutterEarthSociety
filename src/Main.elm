@@ -172,9 +172,6 @@ view model =
           discObjects
         )
 
--- cameraPos : Float -> Vec3
--- cameraPos t = vec3 (4 * cos t) 0 (4 * sin t)
-
 perspectiveMatrix : Mat4
 perspectiveMatrix = Mat4.makePerspective 45 1 0.01 50
 
