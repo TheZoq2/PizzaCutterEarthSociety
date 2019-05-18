@@ -64,7 +64,7 @@ update message model =
                 KeyChange status str -> { model | keys = Key.update str status model.keys }
                 MouseDown event ->
                     case event.button of
-                        Mouse.MiddleButton -> onRightClick model
+                        Mouse.SecondButton -> onRightClick model
                         _ -> model
                 MouseMove x y ->
                     { model | mousePos = Just (x, y)}
@@ -234,6 +234,9 @@ view model =
         onDown =
             { stopPropagation = True, preventDefault = True }
                 |> Mouse.onWithOptions "mousedown"
+        onContextMenu =
+            { stopPropagation = True, preventDefault = True }
+                |> Mouse.onWithOptions "contextmenu"
     in WebGL.toHtmlWith options
         [ width viewportSize.width
         , height viewportSize.height
@@ -243,6 +246,7 @@ view model =
         , style "top" "0"
         , style "left" "0"
         , onDown MouseDown
+        , onContextMenu MouseDown
         ]
         ( renderedBlade ++
           [ renderMesh pizzaCutterHandleMesh <| Mat4.makeTranslate3 0 1 0] ++
