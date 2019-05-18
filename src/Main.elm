@@ -25,6 +25,9 @@ import Msg exposing (Msg (..))
 import Key
 import Camera
 
+viewportSize : (Int, Int)
+viewportSize = (400, 400)
+
 init : Model
 init = { time = 0
        , keys = Dict.empty
@@ -48,7 +51,11 @@ update message model =
                         t = model.theta
 
                         invertedViewMatrix = (Mat4.inverseOrthonormal <| lookAtMatrix t)
-                        params = CameraParameters (cameraPos t) invertedViewMatrix perspectiveMatrix
+                        params = CameraParameters
+                            (cameraPos t)
+                            invertedViewMatrix
+                            perspectiveMatrix
+                            viewportSize
 
                         (intersected, point) = intersections (x, y) params [triangle]
 

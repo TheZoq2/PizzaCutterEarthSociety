@@ -9,6 +9,7 @@ type alias CameraParameters =
     { cameraPosition : Vec3
     , invertedViewMatrix : Mat4
     , perspective : Mat4
+    , viewportSize : (Int, Int)
     }
 
 
@@ -126,8 +127,11 @@ getClickPosition cameraParameters pos =
             toFloat <| Tuple.second pos
 
 
+        viewportWidth = toFloat <| Tuple.first cameraParameters.viewportSize
+        viewportHeight = toFloat <| Tuple.second cameraParameters.viewportSize
+
         normalizedPosition =
-            ( (x * 2) / 400 - 1, (1 - y / 400 * 2) )
+            ( (x * 2) / viewportWidth - 1, (1 - y / viewportHeight * 2) )
 
         _ = Debug.log "Normalized position" normalizedPosition
 
