@@ -118,6 +118,7 @@ main =
 bladeMatrix : Float -> Mat4
 bladeMatrix time = Mat4.makeRotate (time / 1000) (vec3 0 0 1)
 
+
 view : Model -> Html msg
 view model =
     let
@@ -132,6 +133,25 @@ view model =
             , WebGL.antialias
             , WebGL.alpha True
             ]
+
+        renderMesh : Mesh Vertex -> Mat4 -> WebGL.Entity
+        renderMesh mesh modelMatrix =
+            WebGL.entityWith
+                settings
+                vertexShader
+                fragmentShader
+                mesh
+                { modelViewProjection = Mat4.mul (perspective model.theta) modelMatrix
+                , modelMatrix = modelMatrix
+                }
+
+        bladeRotation = bladeMatrix model.time
+
+        discObjects =
+            model.intersections
+                |> List.map (\point -> Mat4.mul bladeRotation (Mat4.makeTranslate point))
+                |> List.map (renderMesh pointerMesh)
+
     in WebGL.toHtmlWith options
         [ width 400
         , height 400
@@ -140,41 +160,12 @@ view model =
         , style "position" "absolute"
         , style "top" "0"
         ,style "left" "0"
-        ] <|
-        [ WebGL.entityWith
-            settings
-            vertexShader
-            fragmentShader
-            pizzaCutterBladeMesh
-            ( let rotation = bladeMatrix model.time
-              in { modelViewProjection = Mat4.mul (perspective model.theta) rotation
-                 , modelMatrix = rotation
-                 }
-            )
-        , WebGL.entityWith
-            settings
-            vertexShader
-            fragmentShader
-            pizzaCutterHandleMesh
-            (let modelMatrix = Mat4.makeTranslate (vec3 0 0.5 0)
-             in { modelViewProjection = Mat4.mul modelMatrix <| perspective model.theta
-                , modelMatrix = modelMatrix
-                }
-            )
-        ] ++
-        List.map (\point ->
-                ( WebGL.entityWith
-                    settings
-                    vertexShader
-                    fragmentShader
-                    (cubeMesh (vec3 0.1 0.1 0.2) (vec3 1 0 0))
-                    (let modelMatrix = Mat4.mul (bladeMatrix model.time) (Mat4.makeTranslate point)
-                     in { modelViewProjection = Mat4.mul (perspective model.theta) modelMatrix
-                        , modelMatrix = modelMatrix
-                        })
-                )
-            )
-            model.intersections
+        ]
+        ( [ renderMesh pizzaCutterBladeMesh bladeRotation
+          , renderMesh pizzaCutterHandleMesh <| Mat4.makeTranslate3 0 1 0
+          ] ++
+          discObjects
+        )
 
 cameraPos : Float -> Vec3
 cameraPos t = vec3 (4 * cos t) 0 (4 * sin t)
@@ -214,16 +205,6 @@ type alias Vertex =
 triangle : (Vec3, Vec3, Vec3)
 triangle =
     (vec3 0 0 0, vec3 1 1 0, vec3 1 -1 0)
-
-mesh : Mesh Vertex
-mesh =
-    let normal = vec3 0 0 1
-    in WebGL.triangles
-        [ ( Vertex (vec3 0 0 0) normal (vec3 1 0 0)
-          , Vertex (vec3 1 1 0) normal (vec3 0 1 0)
-          , Vertex (vec3 1 -1 0) normal (vec3 0 0 1)
-          )
-        ]
 
 pointerMesh : Mesh Vertex
 pointerMesh =
