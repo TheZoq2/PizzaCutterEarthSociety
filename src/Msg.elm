@@ -9,4 +9,4 @@ type Msg
     | TimeDelta Float
     | MouseDown Int Int
     | MouseMove Int Int
-    | TextureLoaded (Result Texture.Error Texture)
+    | TextureLoaded String (Result Texture.Error Texture)

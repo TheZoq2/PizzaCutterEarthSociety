@@ -15,6 +15,7 @@ import WebGL.Settings as Settings
 import WebGL.Settings.DepthTest as DepthTest
 import WebGL.Texture as Texture exposing (Texture)
 import Math.Matrix4 as Mat4 exposing (Mat4)
+import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 as Vec3 exposing (vec3, Vec3)
 import Json.Decode as D exposing (Value)
 import Dict
@@ -33,14 +34,16 @@ viewportSize : (Int, Int)
 viewportSize = (400, 400)
 
 init : Model
-init = { time = 0
-       , keys = Dict.empty
-       , theta = 3.0
-       , intersections = []
-       , mousePos = Nothing
-       }
-
-
+init =
+    { time = 0
+    , keys = Dict.empty
+    , textures = Dict.empty
+    , theta = 3.0
+    , intersections = []
+    , mousePos = Nothing
+    }
+    
+    
 update : Msg -> Model -> (Model, Cmd Msg)
 update message model =
     let
@@ -53,8 +56,10 @@ update message model =
                     { model | intersections = cutterMouseIntersections model (x, y) }
                 MouseMove x y ->
                     { model | mousePos = Just (x, y)}
-                TextureLoaded textureResult ->
-                    let _ = Debug.log "texture loaded" textureResult
+                TextureLoaded file (Ok texture) ->
+                    { model | textures = Dict.insert file texture model.textures }
+                TextureLoaded file err ->
+                    let _ = Debug.log ("Could not load texture" ++ file) err
                     in model
     in (next_model, Cmd.none)
 
@@ -114,7 +119,7 @@ subscriptions model =
 main : Program D.Value Model Msg
 main =
     Browser.element
-        { init = \_ -> ( init, Task.attempt TextureLoaded (Texture.load "../textures/aluminium.jpg") )
+        { init = \_ -> ( init, Task.attempt (TextureLoaded "aluminium") (Texture.load "../textures/aluminium.jpg") )
         , view = view
         , subscriptions = subscriptions
         , update = update
@@ -140,7 +145,7 @@ view model =
             , WebGL.alpha True
             ]
 
-        renderMesh : Mesh Vertex -> Mat4 -> WebGL.Entity
+        renderMesh : Mesh ColoredVertex -> Mat4 -> WebGL.Entity
         renderMesh mesh modelMatrix =
             WebGL.entityWith
                 settings
@@ -151,7 +156,26 @@ view model =
                 , modelMatrix = modelMatrix
                 }
 
+        renderTexturedMesh : Mesh TexturedVertex -> Mat4 -> Texture -> WebGL.Entity
+        renderTexturedMesh mesh modelMatrix texture =
+            WebGL.entityWith
+                settings
+                texturedVertexShader
+                texturedFragmentShader
+                mesh
+                { modelViewProjection = Mat4.mul (perspective model.theta) modelMatrix
+                , modelMatrix = modelMatrix
+                , tex = texture
+                }
+
         bladeRotation = bladeMatrix model.time
+
+        renderedBlade =
+            case Dict.get "aluminium" model.textures of
+              Just texture ->
+                  [ renderTexturedMesh pizzaCutterBladeMesh bladeRotation texture ]
+              Nothing ->
+                  []
 
         discObjects =
             model.intersections
@@ -165,11 +189,10 @@ view model =
         , style "background-color" "white"
         , style "position" "absolute"
         , style "top" "0"
-        ,style "left" "0"
+        , style "left" "0"
         ]
-        ( [ renderMesh pizzaCutterBladeMesh bladeRotation
-          , renderMesh pizzaCutterHandleMesh <| Mat4.makeTranslate3 0 1 0
-          ] ++
+        ( renderedBlade ++
+          [ renderMesh pizzaCutterHandleMesh <| Mat4.makeTranslate3 0 1 0] ++
           discObjects
         )
 
@@ -200,20 +223,18 @@ perspective t =
 -- Shaders
 
 
-type alias Uniforms =
-    { modelViewProjection : Mat4
+type alias Uniforms a =
+    { a | modelViewProjection : Mat4
     , modelMatrix : Mat4
     }
 
+type alias FragmentData a =
+    { a | worldPosition : Vec3 , worldNormal : Vec3 }
 
-type alias VertexToFragmentData =
-    { vcolor : Vec3
-    , worldPosition : Vec3
-    , worldNormal : Vec3
-    }
+type alias ColoredFragement = FragmentData { vcolor : Vec3 }
 
 
-vertexShader : Shader Vertex Uniforms VertexToFragmentData
+vertexShader : Shader ColoredVertex (Uniforms a) ColoredFragement
 vertexShader =
     [glsl|
 
@@ -236,7 +257,7 @@ vertexShader =
     |]
 
 
-fragmentShader : Shader {} Uniforms VertexToFragmentData
+fragmentShader : Shader {} (Uniforms a) ColoredFragement
 fragmentShader =
     [glsl|
 
@@ -256,7 +277,49 @@ fragmentShader =
 
     |]
 
+type alias TexturedUniforms = Uniforms { tex : Texture }
+type alias TexturedFragement = FragmentData { vTexCoords : Vec2 }
+
+texturedVertexShader : Shader TexturedVertex TexturedUniforms TexturedFragement
+texturedVertexShader =
+    [glsl|
+
+        attribute vec3 position;
+        attribute vec3 normal;
+        attribute vec2 texCoords;
+        uniform mat4 modelViewProjection;
+        uniform mat4 modelMatrix;
+        varying vec2 vTexCoords;
+        varying vec3 worldPosition;
+        varying vec3 worldNormal;
+
+        void main () {
+            gl_Position = modelViewProjection * vec4(position, 1.0);
+            vTexCoords = texCoords;
+            worldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+            worldNormal = (modelMatrix * vec4(normal, 0.0)).xyz;
+        }
+
+    |]
 
 
+texturedFragmentShader : Shader {} TexturedUniforms TexturedFragement
+texturedFragmentShader =
+    [glsl|
 
+        precision mediump float;
+        varying vec2 vTexCoords;
+        varying vec3 worldPosition;
+        varying vec3 worldNormal;
+        uniform sampler2D tex;
 
+        const vec3 lightDir = vec3(1.0 / sqrt(3.0));
+        const float ambientLight = 0.1;
+
+        void main () {
+            vec3 normal = normalize(worldNormal);
+            float lightFactor = clamp(dot(normal, lightDir), 0.0, 1.0);
+            gl_FragColor = ambientLight + lightFactor * texture2D(tex, vTexCoords);
+        }
+
+    |]
