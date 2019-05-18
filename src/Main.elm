@@ -12,6 +12,7 @@ import Html exposing (Html)
 import Html.Attributes exposing (width, height, style)
 import WebGL exposing (Mesh, Shader)
 import WebGL.Settings as Settings
+import WebGL.Settings.DepthTest as DepthTest
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector3 as Vec3 exposing (vec3, Vec3)
 import Json.Decode as D exposing (Value)
@@ -116,13 +117,22 @@ bladeMatrix time = Mat4.makeRotate (time / 1000) (vec3 0 0 1)
 view : Model -> Html msg
 view model =
     let
-        settings = [Settings.cullFace Settings.back]
-    in
-    WebGL.toHtml
+        settings =
+            [ Settings.cullFace Settings.back
+            , DepthTest.default
+            ]
+
+        options =
+            [ WebGL.clearColor 0.8 0.8 1.0 1.0
+            , WebGL.depth 1
+            , WebGL.antialias
+            , WebGL.alpha True
+            ]
+    in WebGL.toHtmlWith options
         [ width 400
         , height 400
         , style "display" "block"
-        , style "background-color" "black"
+        , style "background-color" "white"
         , style "position" "absolute"
         , style "top" "0"
         ,style "left" "0"
@@ -238,9 +248,9 @@ pizzaCutterBladeMesh : Mesh Vertex
 pizzaCutterBladeMesh =
     pizzaCutterVertices
         |> List.map (\(pos1, pos2, pos3) ->
-                ( Vertex pos1 (vec3 0 0 -1) (vec3 0.5 0.5 0.5)
-                , Vertex pos2 (vec3 0 0 -1) (vec3 0.5 0.5 0.5)
-                , Vertex pos3 (vec3 0 0 -1) (vec3 0.5 0.5 0.5)
+                ( Vertex pos1 (vec3 0 0 1) (vec3 0.5 0.5 0.5)
+                , Vertex pos2 (vec3 0 0 1) (vec3 0.5 0.5 0.5)
+                , Vertex pos3 (vec3 0 0 1) (vec3 0.5 0.5 0.5)
                 )
             )
         |> WebGL.triangles
@@ -261,26 +271,26 @@ pizzaCutterHandleMesh =
                   ]
             , List.map (\p -> Vertex p (vec3 0 1 0) handleColor)
                   [ vec3 -0.1 top -0.1 -- top
-                  , vec3 0.1 top -0.1
                   , vec3 -0.1 top 0.1
+                  , vec3 0.1 top -0.1
                   , vec3 0.1 top 0.1
                   ]
             , List.map (\p -> Vertex p (vec3 0 0 -1) handleColor)
                   [ vec3 -0.1 bottom -0.1 -- zmin side
-                  , vec3 0.1 bottom -0.1
                   , vec3 -0.1 top -0.1
+                  , vec3 0.1 bottom -0.1
                   , vec3 0.1 top -0.1
                   ]
             , List.map (\p -> Vertex p (vec3 0 0 1) handleColor)
-                  [ vec3 -0.1 bottom -0.1 -- zmax side
-                  , vec3 0.1 bottom -0.1
-                  , vec3 -0.1 top -0.1
-                  , vec3 0.1 top -0.1
+                  [ vec3 -0.1 bottom 0.1 -- zmax side
+                  , vec3 0.1 bottom 0.1
+                  , vec3 -0.1 top 0.1
+                  , vec3 0.1 top 0.1
                   ]
             , List.map (\p -> Vertex p (vec3 -1 0 0) handleColor)
                   [ vec3 -0.1 bottom 0.1 -- xmin side
-                  , vec3 -0.1 bottom -0.1
                   , vec3 -0.1 top 0.1
+                  , vec3 -0.1 bottom -0.1
                   , vec3 -0.1 top -0.1
                   ]
             , List.map (\p -> Vertex p (vec3 1 0 0) handleColor)
@@ -355,7 +365,7 @@ fragmentShader =
 
         void main () {
             vec3 normal = normalize(worldNormal);
-            float lightFactor = 1.;// dot(normal, lightDir);
+            float lightFactor = clamp(dot(normal, lightDir), 0.0, 1.0);
             gl_FragColor = ambientLight + lightFactor * vec4(vcolor, 1.0);
         }
 
