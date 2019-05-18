@@ -19,7 +19,7 @@ import Json.Decode as D exposing (Value)
 import Selection exposing (intersections, CameraParameters)
 import Meshes exposing (..)
 
-import Dict
+import Set exposing (Set)
 
 import Model exposing (Model)
 import Msg exposing (Msg (..))
@@ -32,11 +32,11 @@ viewportSize = (400, 400)
 
 init : Model
 init = { time = 0
-       , keys = Dict.empty
+       , keys = Set.empty
        , theta = 3.0
        , intersections = []
        , mousePos = Nothing
-       , camera = Camera (vec3 0 0 0) (vec3 1 0 0) 1 (vec3 0 0 -1)
+       , camera = Camera (vec3 0 0 0) (vec3 0 0 0)
        }
 
 
@@ -46,8 +46,11 @@ update message model =
         next_model =
             case message of
                 Tick elapsed -> { model | time  = model.time + elapsed }
-                TimeDelta d  -> { model | camera = Camera.update (bladeMatrix model.time) model.keys model.camera }
-                KeyChange status str -> { model | keys = Key.update str status model.keys }
+                TimeDelta d  -> { model | camera = Camera.update model.keys model.camera }
+                KeyChange status str -> { model | keys =
+                                             case status of
+                                                 Key.Up -> Set.remove str model.keys
+                                                 Key.Down -> Set.insert str model.keys }
                 MouseDown x y ->
                     { model | intersections = cutterMouseIntersections model (x, y) }
                 MouseMove x y ->
