@@ -462,7 +462,7 @@ buildMenu model =
         Nothing -> Html.div [] []
 
 perspectiveMatrix : Mat4
-perspectiveMatrix = Mat4.makePerspective 45 1 0.01 50
+perspectiveMatrix = Mat4.makePerspective 60 1 0.01 50
 
 -- TODO: Rename to avoid conflicts with perspectiveMatrix, or rename perspectiveMatrix
 -- to projection
