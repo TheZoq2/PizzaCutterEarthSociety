@@ -10,3 +10,5 @@ angularDivider = 10
 viewportSize : (Int, Int)
 viewportSize = (600, 600)
 
+
+cameraPanSpeed = 0.05

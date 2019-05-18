@@ -45,7 +45,7 @@ init =
     , units = [newUnit (vec3 0.5 0 0), newUnit (vec3 0 0.5 0)]
     , cursor = Nothing
     , selected = Nothing
-       , camera = Camera (vec3 1 0 0) (vec3 0 0 0)
+    , camera = Camera (vec3 1 0 0) (vec3 0 0 0) 1
     }
 
 update : Msg -> Model -> (Model, Cmd Msg)
