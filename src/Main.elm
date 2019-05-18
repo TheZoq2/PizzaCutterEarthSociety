@@ -45,7 +45,7 @@ init =
     , units = [newUnit (vec3 0.5 0 0), newUnit (vec3 0 0.5 0)]
     , cursor = Nothing
     , selected = Nothing
-       , camera = Camera (vec3 0 0 0) (vec3 0 0 0)
+       , camera = Camera (vec3 1 0 0) (vec3 0 0 0)
     }
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -311,7 +311,7 @@ view model =
                 ( renderedBlade ++
                   [ renderMesh pizzaCutterHandleMesh <| Mat4.makeTranslate3 0 1 0
                   , renderMesh (cubeMesh (vec3 0.1 0.1 0.1) (vec3 1 1 1)) <| Mat4.makeTranslate model.camera.base
-                  , renderMesh (cubeMesh (vec3 0.1 0.1 0.1) (vec3 0 0 0)) <| Mat4.makeTranslate model.camera.lookingAt
+                  , renderMesh (cubeMesh (vec3 0.1 0.1 0.1) (vec3 0 0 0)) <| Mat4.makeTranslate model.camera.lookAt
                   ] ++
                   discObjects
                 )

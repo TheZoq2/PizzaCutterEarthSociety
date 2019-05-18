@@ -6,20 +6,9 @@ import Math.Matrix4 as Mat4 exposing (Mat4)
 
 type alias Camera =
     { base : Vec3
-    , lookingAt : Vec3
+    , lookAt : Vec3
     }
 
-bladeCoordInWorld : Mat4 -> Vec3 -> Vec3
-bladeCoordInWorld bladeMat bladeCoord =
-    Mat4.transform bladeMat bladeCoord
-
-pan : Mat4 -> Vec3 -> Camera -> Camera
-pan bladeMat change camera =
-    let ch = bladeCoordInWorld bladeMat change
-    in { camera | lookingAt = Vec3.add camera.lookingAt ch}
-
-panGlobal : Vec3 -> Camera -> Camera
-panGlobal change camera = { camera | lookingAt = Vec3.add camera.lookingAt change }
 
 type alias Input =
     { move : Vec3
@@ -30,32 +19,41 @@ inputBase : Input
 inputBase = { move = (vec3 0 0 0)
             , lookMove = (vec3 0 0 0) }
 
-f : String -> Input -> Input
-f s d = case s of
-            "KeyA" -> { d | move = (vec3  0.1 0 0) }
-            "KeyD" -> { d | move = (vec3 -0.1 0 0) }
-            "KeyW" -> { d | move = (vec3 0  0.1 0) }
-            "KeyS" -> { d | move = (vec3 0 -0.1 0) }
-            "KeyJ" -> { d | lookMove = (vec3 -0.1 0 0) }
-            "KeyP" -> { d | lookMove = (vec3  0.1 0 0) }
-            "KeyC" -> { d | lookMove = (vec3 0  0.1 0) }
-            "KeyV" -> { d | lookMove = (vec3 0 -0.1 0) }
-            _ -> d
+rotate : Vec3 -> Vec3
+rotate v = vec3 (Vec3.getY v) -(Vec3.getX v) (Vec3.getZ v)
+
+f : Vec3 -> String -> Input -> Input
+f v s d =
+    case s of
+        "KeyW" -> { d | move = Vec3.negate v }
+        "KeyA" -> { d | move = Vec3.negate <| rotate v }
+        "KeyS" -> { d | move = v }
+        "KeyD" -> { d | move = rotate v }
+
+        "KeyV" -> { d | lookMove = Vec3.negate v }
+        "KeyJ" -> { d | lookMove = Vec3.negate <| rotate v }
+        "KeyC" -> { d | lookMove = v }
+        "KeyP" -> { d | lookMove = rotate v }
+        _ -> d
+
 
 update : Set String -> Camera -> Camera
 update set camera =
-    let inp = Set.foldl f inputBase set
+    let v   = Vec3.scale 0.1 (Vec3.direction camera.base camera.lookAt)
+        inp = Set.foldl (f v) inputBase set
     in { camera
            | base = Vec3.add camera.base inp.move
-           , lookingAt = Vec3.add inp.move <| Vec3.add camera.lookingAt inp.lookMove
+           , lookAt = Vec3.add inp.move <| Vec3.add camera.lookAt inp.lookMove
        }
+
+
 
 
 lookAtMatrix : Camera -> Mat4
 lookAtMatrix camera =
     Mat4.makeLookAt
-         (Vec3.add camera.base <| vec3 0 0 -1)
-         camera.lookingAt
+         (Vec3.add camera.base <| vec3 0 0 -2)
+         camera.lookAt
          (vec3 0 0 -1)
 
 cameraPos : Camera -> Vec3
