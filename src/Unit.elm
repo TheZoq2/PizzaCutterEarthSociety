@@ -1,4 +1,4 @@
-module Unit exposing (Unit, moveTowardsGoal)
+module Unit exposing (Unit, moveTowardsGoal, newUnit)
 
 import Math.Vector3 as Vec3 exposing (vec3, Vec3)
 
@@ -8,6 +8,11 @@ type alias Unit =
     { position : Vec3
     , goal : Vec3
     }
+
+
+newUnit : Vec3 -> Unit
+newUnit pos =
+    Unit pos pos
 
 
 moveTowardsGoal : Float -> Unit -> Unit

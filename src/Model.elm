@@ -1,4 +1,4 @@
-module Model exposing (Model)
+module Model exposing (Model, Selected(..))
 
 import Math.Vector3 as Vec3 exposing (vec3, Vec3)
 import Dict exposing (Dict)
@@ -7,6 +7,8 @@ import WebGL.Texture exposing (Texture)
 import Key
 import Unit exposing (Unit)
 
+type Selected
+    = SUnit Int
 
 type alias Model =
     { time   : Float
@@ -17,4 +19,5 @@ type alias Model =
     , mousePos : Maybe (Int, Int)
     , units : List Unit
     , cursor : Maybe Vec3
+    , selected : Maybe Selected
     }

@@ -125,7 +125,6 @@ getClickPosition cameraParameters pos =
         normalizedPosition =
             ( (x * 2) / viewportWidth - 1, (1 - y / viewportHeight * 2) )
 
-        _ = Debug.log "Normalized position" normalizedPosition
 
         {cameraPosition, invertedViewMatrix, perspective} = cameraParameters
 

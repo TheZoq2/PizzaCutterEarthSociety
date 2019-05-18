@@ -3,6 +3,7 @@ module Meshes exposing (..)
 import Math.Vector2 exposing (vec2, Vec2)
 import Math.Vector3 as Vec3 exposing (vec3, Vec3)
 import WebGL exposing (Mesh, Shader)
+import Array
 
 type alias VertexBase a =
     { a | position : Vec3
@@ -101,6 +102,24 @@ cubeIndices =
 cubeMesh : Vec3 -> Vec3 -> Mesh ColoredVertex
 cubeMesh size color =
     WebGL.indexedTriangles (cubeVertices size color) cubeIndices
+
+
+cubeTriangles : Vec3 -> List (Vec3, Vec3, Vec3)
+cubeTriangles size =
+    let
+        array = Array.fromList
+            <| List.map .position
+            <| cubeVertices size (vec3 0 0 0)
+    in
+            List.map (\(a, b, c) ->
+                    (Maybe.withDefault (vec3 0 0 0) <| Array.get a array
+                    ,Maybe.withDefault (vec3 0 0 0) <| Array.get b array
+                    ,Maybe.withDefault (vec3 0 0 0) <| Array.get c array
+                    )
+                )
+                cubeIndices
+
+
 
 pizzaCutterHandleMesh : Mesh ColoredVertex
 pizzaCutterHandleMesh =
