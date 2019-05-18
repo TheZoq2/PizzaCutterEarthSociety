@@ -8,6 +8,7 @@ import Browser
 import Browser.Events exposing (onAnimationFrameDelta, onKeyUp, onKeyDown, onMouseDown, onMouseMove)
 import Browser.Events exposing (onAnimationFrameDelta, onMouseDown)
 import Html exposing (Html)
+import Html.Events
 import Html.Attributes exposing (width, height, style)
 import Html.Events.Extra.Mouse as Mouse
 import WebGL exposing (Mesh, Shader)
@@ -20,18 +21,16 @@ import Math.Vector3 as Vec3 exposing (vec3, Vec3)
 import Json.Decode as D exposing (Value)
 import Dict
 import Task
-import Selection exposing (intersections, CameraParameters)
-import Meshes exposing (..)
-
+import Platform.Cmd
 import Set exposing (Set)
 
 import Meshes exposing (..)
 import Unit exposing (Unit, newUnit)
 import Selection exposing (intersections, CameraParameters)
-import Model exposing (Model, Selected(..), buildingName, allBuildings)
+import Model exposing (Model, Selected(..), UnitTool(..))
+import Building exposing (buildingName, allBuildings, newBuilding)
 import Msg exposing (Msg (..))
 import Key
-import Camera
 import Camera exposing (Camera, lookAtMatrix, cameraPos)
 import Config
 
@@ -45,7 +44,9 @@ init =
     , units = [newUnit (vec3 0.5 0 0), newUnit (vec3 0 0.5 0)]
     , cursor = Nothing
     , selected = Nothing
-       , camera = Camera (vec3 1 0 0) (vec3 0 0 0)
+    , buildings = Dict.empty
+    , nextBuildingId = 0
+    , camera = Camera (vec3 1 0 0) (vec3 0 0 0) 1
     }
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -54,8 +55,8 @@ update message model =
         next_model =
             case message of
                 Tick elapsed ->
-                    updateUnits
-                        (elapsed / 1000)
+                    updateBuildings (elapsed / 1000)
+                     <| updateUnits (elapsed / 1000)
                         { model
                             | time = model.time + elapsed
                             , cursor = Maybe.andThen
@@ -79,6 +80,12 @@ update message model =
                 TextureLoaded file err ->
                     let _ = Debug.log ("Could not load texture" ++ file) err
                     in model
+                OnBuildingButton kind ->
+                    case model.selected of
+                        Just (SUnit units _) ->
+                            { model | selected = Just (SUnit units (Just (Build kind)))}
+                        _ ->
+                            Debug.log "Warning: building button clicked without unit" model
     in (next_model, Cmd.none)
 
 
@@ -87,6 +94,19 @@ onLeftClick : Model -> Model
 onLeftClick model =
     let
         mousePos = Maybe.withDefault (0, 0) model.mousePos
+    in
+        case model.selected of
+            Nothing ->
+                trySelect mousePos model
+            Just (SUnit _ Nothing) ->
+                trySelect mousePos model
+            Just (SUnit units (Just (Build buildingKind))) ->
+                tryBuildBuilding mousePos buildingKind units model
+
+
+trySelect : (Int, Int) -> Model -> Model
+trySelect mousePos model =
+    let
         selected =
             List.filterMap (\(hit, index) -> if hit then Just index else Nothing)
              <| List.indexedMap
@@ -104,7 +124,43 @@ onLeftClick model =
     in
         { model | selected = Maybe.map (\id -> SUnit [id] Nothing) <| List.head selected }
 
+tryBuildBuilding : (Int, Int) -> Building.Kind -> List Int -> Model -> Model
+tryBuildBuilding mousePos kind units model =
+    let
+        pos = List.head <| cutterMouseIntersections model mousePos
+        id = model.nextBuildingId
+    in
+        case pos of
+            Just position ->
+                {model
+                    | buildings =
+                        Dict.insert id (newBuilding kind position) model.buildings
+                    , nextBuildingId = model.nextBuildingId + 1
+                    , selected = Nothing
+                    , units =
+                        commandSelectedUnits
+                            (Unit.BuildBuilding id)
+                            model.selected
+                            model.units
+                }
+            Nothing ->
+                model
 
+
+
+commandSelectedUnits : Unit.Goal -> Maybe Selected -> List Unit -> List Unit
+commandSelectedUnits goal selected units =
+    case selected of
+        Just (SUnit indices _) ->
+            List.indexedMap
+                (\i unit ->
+                    if List.member i indices then
+                        Unit.setGoal goal unit
+                    else
+                        unit
+                )
+                units
+        _ -> units
 
 onRightClick : Model -> Model
 onRightClick model =
@@ -124,7 +180,7 @@ onRightClick model =
                     List.indexedMap
                         (\index unit ->
                             if List.member index selectedUnits then
-                                {unit | goal = goalUnwraped}
+                                {unit | goal = Unit.MoveTo goalUnwraped}
                             else
                                 unit
                         )
@@ -136,7 +192,48 @@ onRightClick model =
 
 updateUnits : Float -> Model -> Model
 updateUnits elapsedTime model =
-    {model | units = List.map (Unit.moveTowardsGoal elapsedTime) model.units}
+    {model | units = List.map (Unit.moveTowardsGoal elapsedTime model.buildings) model.units}
+
+
+updateBuildings : Float -> Model -> Model
+updateBuildings elapsedTime model =
+    let
+        buildingFn units index building =
+            let
+                -- Filter all buildings that 
+                buildingUnits =
+                    List.length
+                     <| List.filter
+                        (\{position, goal} ->
+                            let
+                                distance = Vec3.distance building.position position
+                            in
+                                (distance < Config.buildRadius)
+                                &&
+                                (goal == Unit.BuildBuilding index)
+                        )
+                        units
+
+                _ = Debug.log "buildingUnits" buildingUnits
+
+                status =
+                    case building.status of
+                        Building.Unbuilt progress ->
+                            if progress > 1 then
+                                Building.Done
+                            else
+                                Building.Unbuilt
+                                    (progress + (elapsedTime / Config.buildTime) * toFloat buildingUnits)
+                        a -> a
+            in
+                {building | status = status}
+
+        newBuildings =
+            Dict.map
+                (buildingFn model.units)
+                model.buildings
+    in
+        {model | buildings = newBuildings}
 
 
 cutterMouseIntersections : Model -> (Int, Int) -> List Vec3
@@ -210,10 +307,22 @@ subscriptions model =
         ]
 
 
+textureFiles =
+    [ ( "aluminium", "../textures/aluminium.jpg" )
+    , ( "norway", "../textures/norway.png" )
+    ]
+
+textureTasks =
+    textureFiles
+        |> List.map (\(name, filename) ->
+                         Task.attempt (TextureLoaded name) (Texture.load filename))
+        |> Platform.Cmd.batch
+
+
 main : Program D.Value Model Msg
 main =
     Browser.element
-        { init = \_ -> ( init, Task.attempt (TextureLoaded "aluminium") (Texture.load "../textures/aluminium.jpg") )
+        { init = \_ -> ( init, textureTasks )
         , view = view
         , subscriptions = subscriptions
         , update = update
@@ -262,8 +371,19 @@ view model =
                 , tex = texture
                 }
 
-        bladeRotation = bladeMatrix model.time
+        renderBillboardMesh : Mat4 -> Texture -> WebGL.Entity
+        renderBillboardMesh modelMatrix texture =
+            WebGL.entityWith
+                settings
+                billboardVertexShader
+                billboardFragmentShader
+                billboardMesh
+                { modelViewProjection = Mat4.mul (perspective model.camera) modelMatrix
+                , tex = texture
+                , cameraPos = cameraPos model.camera
+                }
 
+        bladeRotation = bladeMatrix model.time
 
         renderedBlade =
             case Dict.get "aluminium" model.textures of
@@ -272,7 +392,14 @@ view model =
               Nothing ->
                   []
 
-        cursor = 
+        renderedNorway =
+            case Dict.get "norway" model.textures of
+              Just texture ->
+                  [ renderBillboardMesh (Mat4.translate3 1.0 0.3 0 <| Mat4.makeScale3 0.1 0.1 0.1) texture ]
+              Nothing ->
+                  []
+
+        cursor =
             case model.cursor of
                 Just pos ->
                     [ renderMesh
@@ -281,6 +408,25 @@ view model =
                     ]
                 Nothing -> []
 
+        drawBuilding {position, kind, status} =
+            let
+                size = 0.1
+                color =
+                    case kind of
+                        Building.Green -> vec3 0 1 0
+                        Building.Blue -> vec3 0 0 1
+
+                fullPosition =
+                    case status of
+                        Building.Unbuilt progress ->
+                            Vec3.add position (vec3 0 0 ((1-progress) * size/2))
+                        _ ->
+                            position
+            in
+                renderMesh
+                    (cubeMesh (vec3 size size size) color)
+                    (Mat4.mul bladeRotation (Mat4.makeTranslate fullPosition))
+
         discObjects =
             cursor
             ++
@@ -288,13 +434,16 @@ view model =
                 |> List.map (\{position} -> Mat4.mul bladeRotation (Mat4.makeTranslate position))
                 |> List.map (renderMesh (cubeMesh (vec3 0.05 0.05 0.2) (vec3 1 0 0)))
             )
+            ++ (List.map drawBuilding <| Dict.values model.buildings)
 
         onDown =
             { stopPropagation = True, preventDefault = True }
                 |> Mouse.onWithOptions "mousedown"
+
         onContextMenu =
             { stopPropagation = True, preventDefault = True }
                 |> Mouse.onWithOptions "contextmenu"
+
     in Html.div
         [ style "position" "absolute"
         , style "top" "0"
@@ -310,10 +459,9 @@ view model =
                 ]
                 ( renderedBlade ++
                   [ renderMesh pizzaCutterHandleMesh <| Mat4.makeTranslate3 0 1 0
-                  , renderMesh (cubeMesh (vec3 0.1 0.1 0.1) (vec3 1 1 1)) <| Mat4.makeTranslate model.camera.base
-                  , renderMesh (cubeMesh (vec3 0.1 0.1 0.1) (vec3 0 0 0)) <| Mat4.makeTranslate model.camera.lookAt
                   ] ++
-                  discObjects
+                  discObjects ++
+                  renderedNorway
                 )
             ]
             ++
@@ -325,7 +473,11 @@ buildMenu : Model -> Html Msg
 buildMenu model =
     let
         buildingButton building =
-            Html.div [] [Html.div [] [Html.button [] [Html.text <| buildingName building]]]
+            Html.div
+                []
+                [Html.button
+                    [Html.Events.onClick (OnBuildingButton building)]
+                    [Html.text <| buildingName building]]
     in
     case model.selected of
         Just (SUnit _ _) ->
@@ -337,8 +489,9 @@ buildMenu model =
                     allBuildings
         Nothing -> Html.div [] []
 
+
 perspectiveMatrix : Mat4
-perspectiveMatrix = Mat4.makePerspective 45 1 0.01 50
+perspectiveMatrix = Mat4.makePerspective 60 1 0.01 50
 
 -- TODO: Rename to avoid conflicts with perspectiveMatrix, or rename perspectiveMatrix
 -- to projection
@@ -395,12 +548,12 @@ fragmentShader =
         varying vec3 worldPosition;
         varying vec3 worldNormal;
 
-        const vec3 lightDir = vec3(1.0 / sqrt(3.0));
-        const float ambientLight = 0.1;
+        const vec3 lightDir = vec3(1.0, -1.0, 1.0);
+        const float ambientLight = 0.2;
 
         void main () {
             vec3 normal = normalize(worldNormal);
-            float lightFactor = clamp(dot(normal, lightDir), 0.0, 1.0);
+            float lightFactor = clamp(dot(normal, normalize(lightDir)), 0.0, 1.0);
             gl_FragColor = vec4((ambientLight + lightFactor) * vcolor, 1.0);
         }
 
@@ -442,13 +595,58 @@ texturedFragmentShader =
         varying vec3 worldNormal;
         uniform sampler2D tex;
 
-        const vec3 lightDir = vec3(1.0 / sqrt(3.0));
-        const float ambientLight = 0.1;
+        const vec3 lightDir = vec3(1.0, -1.0, 1.0);
+        const float ambientLight = 0.2;
 
         void main () {
             vec3 normal = normalize(worldNormal);
-            float lightFactor = clamp(dot(normal, lightDir), 0.0, 1.0);
+            float lightFactor = clamp(dot(normal, normalize(lightDir)), 0.0, 1.0);
             gl_FragColor = vec4(ambientLight + lightFactor * texture2D(tex, vTexCoords).rgb, 1);
+        }
+
+    |]
+
+type alias BillboardUniforms =
+    { modelViewProjection : Mat4
+    , cameraPos : Vec3
+    , tex: Texture
+    }
+
+type alias BillboardFragment =
+    { vTexCoords : Vec2 }
+
+billboardVertexShader : Shader BillboardVertex BillboardUniforms BillboardFragment
+billboardVertexShader =
+    [glsl|
+
+        attribute vec3 position;
+        attribute vec2 texCoords;
+        uniform mat4 modelViewProjection;
+        uniform vec3 cameraPos;
+        varying vec2 vTexCoords;
+
+        void main () {
+            vec3 toCamera = normalize(cameraPos - position);
+            vec3 up = vec3(0.0, 1.0, 0.0);
+            vec3 right = cross(toCamera, up);
+            vec3 pos = right * position.x + cross(right, toCamera) * position.y;
+            gl_Position = modelViewProjection * vec4(pos, 1.0);
+            vTexCoords = texCoords;
+        }
+
+    |]
+
+
+billboardFragmentShader : Shader {} BillboardUniforms BillboardFragment
+billboardFragmentShader =
+    [glsl|
+
+        precision mediump float;
+        varying vec2 vTexCoords;
+        uniform sampler2D tex;
+
+        void main () {
+            gl_FragColor = texture2D(tex, vTexCoords);
         }
 
     |]
