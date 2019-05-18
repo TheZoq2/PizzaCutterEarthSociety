@@ -1,11 +1,14 @@
 module Msg exposing (Msg (..))
 
+import WebGL.Texture as Texture exposing (Texture)
+import Html.Events.Extra.Mouse as Mouse
+
 import Key
 
 type Msg
     = Tick Float
     | KeyChange Key.Status String
     | TimeDelta Float
-    | MouseDown Int Int
+    | MouseDown Mouse.Event
     | MouseMove Int Int
-
+    | TextureLoaded String (Result Texture.Error Texture)
