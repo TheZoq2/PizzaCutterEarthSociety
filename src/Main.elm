@@ -32,7 +32,7 @@ init : Model
 init = { time = 0
        , keys = Dict.empty
        , theta = 3.0
-       , pointer = (vec3 0 0 0)
+       , intersections = []
        }
 
 
@@ -67,12 +67,12 @@ update message model =
                                 )
                                 pizzaCutterVertices
 
-                        (intersected, point)
+                        rayHits
                             = intersections (x, y) params triangles
 
-                        _ = Debug.log "Hit: " intersected
+                        _ = Debug.log "Amount hit: " (List.length rayHits)
                     in
-                        { model | pointer = point }
+                        { model | intersections = rayHits }
     in (next_model, Cmd.none)
 
 
@@ -117,8 +117,8 @@ view model =
         , style "background-color" "black"
         , style "position" "absolute"
         , style "top" "0"
-        , style "left" "0"
-        ]
+        ,style "left" "0"
+        ] <|
         [ WebGL.entityWith
             settings
             vertexShader
@@ -145,16 +145,20 @@ view model =
             { modelViewProjection = perspective model.theta
             , modelMatrix = Mat4.identity
             }
-        , WebGL.entityWith
-            settings
-            vertexShader
-            fragmentShader
-            pointerMesh
-            (let translation = Mat4.makeTranslate model.pointer
-             in { modelViewProjection = Mat4.mul (perspective model.theta) translation
-                , modelMatrix = translation
-                })
-        ]
+        ] ++
+        List.map (\point ->
+                ( WebGL.entityWith
+                    settings
+                    vertexShader
+                    fragmentShader
+                    pointerMesh
+                    (let translation = Mat4.makeTranslate point
+                     in { modelViewProjection = Mat4.mul (perspective model.theta) translation
+                        , modelMatrix = translation
+                        })
+                )
+            )
+            model.intersections
 
 cameraPos : Float -> Vec3
 cameraPos t = vec3 (4 * cos t) 0 (4 * sin t)
@@ -220,8 +224,8 @@ circleVertices radius numberOfSegments =
     List.map
         (\i -> let angle toAdd = turns (toFloat (i + toAdd) / toFloat numberOfSegments)
                in ( vec3 0 0 0
-                  , vec3 (cos <| angle 0) (sin <| angle 0) 0
                   , vec3 (cos <| angle 1) (sin <| angle 1) 0
+                  , vec3 (cos <| angle 0) (sin <| angle 0) 0
                   )
         )
         (List.range 0 numberOfSegments)

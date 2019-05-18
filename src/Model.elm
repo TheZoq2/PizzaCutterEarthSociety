@@ -8,5 +8,5 @@ type alias Model =
     { time   : Float
     , keys   : Dict String Key.Status
     , theta  : Float
-    , pointer : Vec3
+    , intersections : List Vec3
     }
