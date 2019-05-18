@@ -430,8 +430,6 @@ view model =
                 ]
                 ( renderedBlade ++
                   [ renderMesh pizzaCutterHandleMesh <| Mat4.makeTranslate3 0 1 0
-                  , renderMesh (cubeMesh (vec3 0.1 0.1 0.1) (vec3 1 1 1)) <| Mat4.makeTranslate model.camera.base
-                  , renderMesh (cubeMesh (vec3 0.1 0.1 0.1) (vec3 0 0 0)) <| Mat4.makeTranslate model.camera.lookAt
                   ] ++
                   discObjects
                 )
@@ -460,6 +458,7 @@ buildMenu model =
                     buildingButton
                     allBuildings
         Nothing -> Html.div [] []
+
 
 perspectiveMatrix : Mat4
 perspectiveMatrix = Mat4.makePerspective 60 1 0.01 50
