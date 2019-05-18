@@ -24,7 +24,7 @@ import Task
 import Meshes exposing (..)
 import Unit exposing (Unit, newUnit)
 import Selection exposing (intersections, CameraParameters)
-import Model exposing (Model, Selected(..))
+import Model exposing (Model, Selected(..), buildingName, allBuildings)
 import Msg exposing (Msg (..))
 import Key
 import Camera
@@ -95,7 +95,7 @@ onLeftClick model =
                 )
                 model.units
     in
-        { model | selected = Maybe.map SUnit <| List.head selected }
+        { model | selected = Maybe.map (\id -> SUnit [id] Nothing) <| List.head selected }
 
 
 
@@ -108,7 +108,7 @@ onRightClick model =
                 model.mousePos
 
         selectedUnits = case model.selected of
-            Just (SUnit id) -> [id]
+            Just (SUnit indexes _) -> indexes
             _ -> []
 
         newUnits =
@@ -285,21 +285,44 @@ view model =
         onContextMenu =
             { stopPropagation = True, preventDefault = True }
                 |> Mouse.onWithOptions "contextmenu"
-    in WebGL.toHtmlWith options
-        [ width <| Tuple.first Config.viewportSize
-        , height <| Tuple.second Config.viewportSize
-        , style "display" "block"
-        , style "background-color" "white"
-        , style "position" "absolute"
+    in Html.div
+        [ style "position" "absolute"
         , style "top" "0"
         , style "left" "0"
-        , onDown MouseDown
-        , onContextMenu MouseDown
         ]
-        ( renderedBlade ++
-          [ renderMesh pizzaCutterHandleMesh <| Mat4.makeTranslate3 0 1 0] ++
-          discObjects
-        )
+        <| [ WebGL.toHtmlWith options
+                [ width <| Tuple.first Config.viewportSize
+                , height <| Tuple.second Config.viewportSize
+                , style "display" "block"
+                , style "background-color" "white"
+                , onDown MouseDown
+                , onContextMenu MouseDown
+                ]
+                ( renderedBlade ++
+                  [ renderMesh pizzaCutterHandleMesh <| Mat4.makeTranslate3 0 1 0] ++
+                  discObjects
+                )
+            ]
+            ++
+            [ buildMenu model
+            ]
+
+
+buildMenu : Model -> Html Msg
+buildMenu model =
+    let
+        buildingButton building =
+            Html.div [] [Html.div [] [Html.button [] [Html.text <| buildingName building]]]
+    in
+    case model.selected of
+        Just (SUnit _ _) ->
+            -- Buildings
+            let _ = Debug.log "processing selected" "" in
+            Html.ul []
+                <| List.map
+                    buildingButton
+                    allBuildings
+        Nothing -> Html.div [] []
 
 cameraPos : Float -> Vec3
 cameraPos t = vec3 (4 * cos t) 0 (4 * sin t)
