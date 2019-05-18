@@ -165,7 +165,7 @@ perspective t =
 
 type alias Vertex =
     { position : Vec3
-    , normals : Vec3
+    , normal : Vec3
     , color : Vec3
     }
 
@@ -278,36 +278,52 @@ type alias Uniforms =
     }
 
 
-vertexShader : Shader Vertex Uniforms { vcolor : Vec3, vWorldPosition : Vec3 }
+type alias VertexToFragmentData =
+    { vcolor : Vec3
+    , worldPosition : Vec3
+    , worldNormal : Vec3
+    }
+
+
+vertexShader : Shader Vertex Uniforms VertexToFragmentData
 vertexShader =
     [glsl|
 
         attribute vec3 position;
+        attribute vec3 normal;
         attribute vec3 color;
         uniform mat4 modelViewProjection;
         uniform mat4 modelMatrix;
         varying vec3 vcolor;
-        varying vec3 vWorldPosition;
+        varying vec3 worldPosition;
+        varying vec3 worldNormal;
 
         void main () {
             gl_Position = modelViewProjection * vec4(position, 1.0);
             vcolor = color;
-            vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+            worldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+            worldNormal = (modelMatrix * vec4(normal, 0.0)).xyz;
         }
 
     |]
 
 
-fragmentShader : Shader {} Uniforms { vcolor : Vec3, vWorldPosition : Vec3 }
+fragmentShader : Shader {} Uniforms VertexToFragmentData
 fragmentShader =
     [glsl|
 
         precision mediump float;
         varying vec3 vcolor;
-        varying vec3 vWorldPosition;
+        varying vec3 worldPosition;
+        varying vec3 worldNormal;
+
+        const vec3 lightDir = vec3(1.0 / sqrt(3.0));
+        const float ambientLight = 0.1;
 
         void main () {
-            gl_FragColor = vec4(vcolor, 1.0);
+            vec3 normal = normalize(worldNormal);
+            float lightFactor = dot(normal, lightDir);
+            gl_FragColor = ambientLight + lightFactor * vec4(vcolor, 1.0);
         }
 
     |]
