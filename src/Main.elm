@@ -152,9 +152,11 @@ view model =
             vertexShader
             fragmentShader
             pizzaCutterHandleMesh
-            { modelViewProjection = perspective model.theta
-            , modelMatrix = Mat4.identity
-            }
+            (let modelMatrix = Mat4.makeTranslate (vec3 0 0.5 0)
+             in { modelViewProjection = Mat4.mul modelMatrix <| perspective model.theta
+                , modelMatrix = modelMatrix
+                }
+            )
         ] ++
         List.map (\point ->
                 ( WebGL.entityWith
@@ -256,60 +258,72 @@ pizzaCutterBladeMesh =
         |> WebGL.triangles
 
 
+cubeVertices : Vec3 -> Vec3 -> List Vertex
+cubeVertices size color =
+    let
+        cornerX = Vec3.getX size / 2
+        cornerY = Vec3.getY size / 2
+        cornerZ = Vec3.getZ size / 2
+    in
+    List.concat
+        [ List.map (\p -> Vertex p (vec3 0 -1 0) color)
+              [ vec3 -cornerX -cornerY -cornerZ -- bottom
+              , vec3  cornerX -cornerY -cornerZ
+              , vec3 -cornerX -cornerY  cornerZ
+              , vec3  cornerX -cornerY  cornerZ
+              ]
+        , List.map (\p -> Vertex p (vec3 0 1 0) color)
+              [ vec3 -cornerX cornerY -cornerZ -- cornerY
+              , vec3 -cornerX cornerY  cornerZ
+              , vec3  cornerX cornerY -cornerZ
+              , vec3  cornerX cornerY  cornerZ
+              ]
+        , List.map (\p -> Vertex p (vec3 0 0 -1) color)
+              [ vec3 -cornerX -cornerY -cornerZ -- zmin side
+              , vec3 -cornerX  cornerY -cornerZ
+              , vec3  cornerX -cornerY -cornerZ
+              , vec3  cornerX  cornerY -cornerZ
+              ]
+        , List.map (\p -> Vertex p (vec3 0 0 1) color)
+              [ vec3 -cornerX -cornerY cornerZ -- zmax side
+              , vec3  cornerX -cornerY cornerZ
+              , vec3 -cornerX  cornerY cornerZ
+              , vec3  cornerX  cornerY cornerZ
+              ]
+        , List.map (\p -> Vertex p (vec3 -1 0 0) color)
+              [ vec3 -cornerX -cornerY  cornerZ -- xmin side
+              , vec3 -cornerX  cornerY  cornerZ
+              , vec3 -cornerX -cornerY -cornerZ
+              , vec3 -cornerX  cornerY -cornerZ
+              ]
+        , List.map (\p -> Vertex p (vec3 1 0 0) color)
+              [ vec3 cornerX -cornerY cornerZ -- xmax side
+              , vec3 cornerX -cornerY -cornerZ
+              , vec3 cornerX cornerY cornerZ
+              , vec3 cornerX cornerY -cornerZ
+              ]
+        ]
+
+
+cubeIndices : List (Int, Int, Int)
+cubeIndices = 
+    List.concatMap
+        (\i -> [ ( i, i + 1, i + 2 ), ( i + 1, i + 3, i + 2 ) ])
+        (List.map (\i -> i*4) <| List.range 0 5)
+
+
 pizzaCutterHandleMesh : Mesh Vertex
 pizzaCutterHandleMesh =
     let
         handleColor =
             vec3 0.4 0.4 0.3
 
-        handlePositions bottom top = List.concat
-            [ List.map (\p -> Vertex p (vec3 0 -1 0) handleColor)
-                  [ vec3 -0.1 bottom -0.1 -- bottom
-                  , vec3 0.1 bottom -0.1
-                  , vec3 -0.1 bottom 0.1
-                  , vec3 0.1 bottom 0.1
-                  ]
-            , List.map (\p -> Vertex p (vec3 0 1 0) handleColor)
-                  [ vec3 -0.1 top -0.1 -- top
-                  , vec3 -0.1 top 0.1
-                  , vec3 0.1 top -0.1
-                  , vec3 0.1 top 0.1
-                  ]
-            , List.map (\p -> Vertex p (vec3 0 0 -1) handleColor)
-                  [ vec3 -0.1 bottom -0.1 -- zmin side
-                  , vec3 -0.1 top -0.1
-                  , vec3 0.1 bottom -0.1
-                  , vec3 0.1 top -0.1
-                  ]
-            , List.map (\p -> Vertex p (vec3 0 0 1) handleColor)
-                  [ vec3 -0.1 bottom 0.1 -- zmax side
-                  , vec3 0.1 bottom 0.1
-                  , vec3 -0.1 top 0.1
-                  , vec3 0.1 top 0.1
-                  ]
-            , List.map (\p -> Vertex p (vec3 -1 0 0) handleColor)
-                  [ vec3 -0.1 bottom 0.1 -- xmin side
-                  , vec3 -0.1 top 0.1
-                  , vec3 -0.1 bottom -0.1
-                  , vec3 -0.1 top -0.1
-                  ]
-            , List.map (\p -> Vertex p (vec3 1 0 0) handleColor)
-                  [ vec3 0.1 bottom 0.1 -- xmax side
-                  , vec3 0.1 bottom -0.1
-                  , vec3 0.1 top 0.1
-                  , vec3 0.1 top -0.1
-                  ]
-            ]
+        handlePositions length = cubeVertices (vec3 0.1 length 0.1) handleColor
 
         handleAttributes =
-            handlePositions -0.2 2
-
-        handleIndices =
-            List.concatMap
-                (\i -> [ ( i, i + 1, i + 2 ), ( i + 1, i + 3, i + 2 ) ])
-                (List.map (\i -> i*4) <| List.range 0 5)
+            handlePositions 2.2
     in
-        WebGL.indexedTriangles handleAttributes handleIndices
+        WebGL.indexedTriangles handleAttributes cubeIndices
 
 
 -- Shaders
