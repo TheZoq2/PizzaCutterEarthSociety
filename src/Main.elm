@@ -45,39 +45,39 @@ update message model =
                 TimeDelta d  -> { model | theta = model.theta + Camera.posDelta model.keys d }
                 KeyChange status str -> { model | keys = Key.update str status model.keys }
                 MouseDown x y ->
-                    let
-                        _ = Debug.log "mousedown" (x, y)
-
-                        t = model.theta
-
-                        invertedViewMatrix = (Mat4.inverseOrthonormal <| lookAtMatrix t)
-                        params = CameraParameters
-                            (cameraPos t)
-                            invertedViewMatrix
-                            perspectiveMatrix
-                            viewportSize
-
-                        bladeMat = (bladeMatrix model.time)
-                        triangles =
-                            List.map
-                                (\(a, b, c) ->
-                                    ( Mat4.transform bladeMat a
-                                    , Mat4.transform bladeMat b
-                                    , Mat4.transform bladeMat c
-                                    )
-                                )
-                                pizzaCutterVertices
-
-                        rayHits =
-                            intersections (x, y) params triangles
-                            |> List.map (worldCoordInBlade bladeMat)
-
-                        _ = Debug.log "Amount hit: " (List.length rayHits)
-                    in
-                        { model | intersections = rayHits }
+                    { model | intersections = cutterMouseIntersections model (x, y) }
     in (next_model, Cmd.none)
 
 
+
+cutterMouseIntersections : Model -> (Int, Int) -> List Vec3
+cutterMouseIntersections model (x, y) =
+    let
+        t = model.theta
+
+        invertedViewMatrix = (Mat4.inverseOrthonormal <| lookAtMatrix t)
+        params = CameraParameters
+            (cameraPos t)
+            invertedViewMatrix
+            perspectiveMatrix
+            viewportSize
+
+        bladeMat = (bladeMatrix model.time)
+        triangles =
+            List.map
+                (\(a, b, c) ->
+                    ( Mat4.transform bladeMat a
+                    , Mat4.transform bladeMat b
+                    , Mat4.transform bladeMat c
+                    )
+                )
+                pizzaCutterVertices
+
+        rayHits =
+            intersections (x, y) params triangles
+            |> List.map (worldCoordInBlade bladeMat)
+    in
+        rayHits
 
 worldCoordInBlade : Mat4 -> Vec3 -> Vec3
 worldCoordInBlade bladeMat worldCoord =
