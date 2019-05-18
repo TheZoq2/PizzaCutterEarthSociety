@@ -69,12 +69,16 @@ view model =
             vertexShader
             fragmentShader
             pizzaCutterBladeMesh
-            { matrix = perspective model }
+            { modelViewProjection = perspective model
+            , modelMatrix = Mat4.identity
+            }
     , WebGL.entity
         vertexShader
-            fragmentShader
-                pizzaCutterHandleMesh
-                { matrix = perspective model }
+        fragmentShader
+        pizzaCutterHandleMesh
+        { modelViewProjection = perspective model
+        , modelMatrix = Mat4.identity
+        }
     ]
 
 perspective : Model -> Mat4
@@ -93,16 +97,18 @@ perspective m =
 
 type alias Vertex =
     { position : Vec3
+    , normals : Vec3
     , color : Vec3
     }
 
 
 mesh : Mesh Vertex
 mesh =
-    WebGL.triangles
-        [ ( Vertex (vec3 0 0 0) (vec3 1 0 0)
-          , Vertex (vec3 1 1 0) (vec3 0 1 0)
-          , Vertex (vec3 1 -1 0) (vec3 0 0 1)
+    let normal = vec3 0 0 1
+    in WebGL.triangles
+        [ ( Vertex (vec3 0 0 0) normal (vec3 1 0 0)
+          , Vertex (vec3 1 1 0) normal (vec3 0 1 0)
+          , Vertex (vec3 1 -1 0) normal (vec3 0 0 1)
           )
         ]
 
@@ -120,38 +126,62 @@ circleVertexPositions radius numberOfSegments =
 pizzaCutterBladeMesh : Mesh Vertex
 pizzaCutterBladeMesh =
     circleVertexPositions 1 32
-        |> List.map (\pos -> Vertex pos (vec3 0.5 0.5 0.5))
+        |> List.map (\pos -> Vertex pos (vec3 0 0 -1) (vec3 0.5 0.5 0.5))
         |> WebGL.triangleFan
 
 
 pizzaCutterHandleMesh : Mesh Vertex
 pizzaCutterHandleMesh =
     let
-        handlePositions y =
-            [ vec3 -0.1 y -0.1 -- bottom 0, top 4
-            , vec3 0.1 y -0.1  -- bottom 1, top 5
-            , vec3 -0.1 y 0.1  -- bottom 2, top 6
-            , vec3 0.1 y 0.1   -- bottom 3, top 7
+        handleColor =
+            vec3 0.4 0.4 0.3
+
+        handlePositions bottom top = List.concat
+            [ List.map (\p -> Vertex p (vec3 0 -1 0) handleColor)
+                  [ vec3 -0.1 bottom -0.1 -- bottom
+                  , vec3 0.1 bottom -0.1
+                  , vec3 -0.1 bottom 0.1
+                  , vec3 0.1 bottom 0.1
+                  ]
+            , List.map (\p -> Vertex p (vec3 0 1 0) handleColor)
+                  [ vec3 -0.1 top -0.1 -- top
+                  , vec3 0.1 top -0.1
+                  , vec3 -0.1 top 0.1
+                  , vec3 0.1 top 0.1
+                  ]
+            , List.map (\p -> Vertex p (vec3 0 0 -1) handleColor)
+                  [ vec3 -0.1 bottom -0.1 -- zmin side
+                  , vec3 0.1 bottom -0.1
+                  , vec3 -0.1 top -0.1
+                  , vec3 0.1 top -0.1
+                  ]
+            , List.map (\p -> Vertex p (vec3 0 0 1) handleColor)
+                  [ vec3 -0.1 bottom -0.1 -- zmax side
+                  , vec3 0.1 bottom -0.1
+                  , vec3 -0.1 top -0.1
+                  , vec3 0.1 top -0.1
+                  ]
+            , List.map (\p -> Vertex p (vec3 -1 0 0) handleColor)
+                  [ vec3 -0.1 bottom 0.1 -- xmin side
+                  , vec3 -0.1 bottom -0.1
+                  , vec3 -0.1 top 0.1
+                  , vec3 -0.1 top -0.1
+                  ]
+            , List.map (\p -> Vertex p (vec3 1 0 0) handleColor)
+                  [ vec3 0.1 bottom 0.1 -- xmax side
+                  , vec3 0.1 bottom -0.1
+                  , vec3 0.1 top 0.1
+                  , vec3 0.1 top -0.1
+                  ]
             ]
 
         handleAttributes =
-            handlePositions -0.2 ++ handlePositions 2
-                |> List.map (\pos -> Vertex pos (vec3 0.4 0.4 0.3))
+            handlePositions -0.2 2
 
         handleIndices =
-            [ ( 0, 1, 2 ) -- bottom
-            , ( 1, 3, 2 )
-            , ( 4, 5, 6 ) -- top
-            , ( 5, 7, 6 )
-            , ( 0, 1, 4 ) -- zmin side
-            , ( 1, 4, 5 )
-            , ( 2, 3, 6 ) -- zmax side
-            , ( 3, 6, 7 )
-            , ( 0, 2, 4 ) -- xmin side
-            , ( 2, 4, 6 )
-            , ( 1, 3, 5 ) -- xmax side
-            , ( 3, 5, 7 )
-            ]
+            List.concatMap
+                (\i -> [ ( i, i + 1, i + 2 ), ( i + 1, i + 3, i + 2 ) ])
+                (List.map (\i -> i*4) <| List.range 0 5)
     in
         WebGL.indexedTriangles handleAttributes handleIndices
 
@@ -160,32 +190,38 @@ pizzaCutterHandleMesh =
 
 
 type alias Uniforms =
-    { matrix : Mat4 }
+    { modelViewProjection : Mat4
+    , modelMatrix : Mat4
+    }
 
 
-vertexShader : Shader Vertex Uniforms { vcolor : Vec3 }
+vertexShader : Shader Vertex Uniforms { vcolor : Vec3, vWorldPosition : Vec3 }
 vertexShader =
     [glsl|
 
         attribute vec3 position;
         attribute vec3 color;
-        uniform mat4 matrix;
+        uniform mat4 modelViewProjection;
+        uniform mat4 modelMatrix;
         varying vec3 vcolor;
+        varying vec3 vWorldPosition;
 
         void main () {
-            gl_Position = matrix * vec4(position, 1.0);
+            gl_Position = modelViewProjection * vec4(position, 1.0);
             vcolor = color;
+            vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
         }
 
     |]
 
 
-fragmentShader : Shader {} Uniforms { vcolor : Vec3 }
+fragmentShader : Shader {} Uniforms { vcolor : Vec3, vWorldPosition : Vec3 }
 fragmentShader =
     [glsl|
 
         precision mediump float;
         varying vec3 vcolor;
+        varying vec3 vWorldPosition;
 
         void main () {
             gl_FragColor = vec4(vcolor, 1.0);
