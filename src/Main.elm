@@ -351,7 +351,7 @@ fragmentShader =
 
         void main () {
             vec3 normal = normalize(worldNormal);
-            float lightFactor = dot(normal, lightDir);
+            float lightFactor = 1.;// dot(normal, lightDir);
             gl_FragColor = ambientLight + lightFactor * vec4(vcolor, 1.0);
         }
 
