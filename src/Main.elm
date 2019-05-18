@@ -158,7 +158,7 @@ view model =
         ,style "left" "0"
         ]
         ( [ renderMesh pizzaCutterBladeMesh bladeRotation
-          , renderMesh pizzaCutterHandleMesh <| Mat4.makeTranslate3 0 0.5 0
+          , renderMesh pizzaCutterHandleMesh <| Mat4.makeTranslate3 0 1 0
           ] ++
           discObjects
         )
@@ -292,6 +292,9 @@ cubeIndices =
         (\i -> [ ( i, i + 1, i + 2 ), ( i + 1, i + 3, i + 2 ) ])
         (List.map (\i -> i*4) <| List.range 0 5)
 
+cubeMesh : Vec3 -> Vec3 -> Mesh Vertex
+cubeMesh size color =
+    WebGL.indexedTriangles (cubeVertices size color) cubeIndices
 
 pizzaCutterHandleMesh : Mesh Vertex
 pizzaCutterHandleMesh =
