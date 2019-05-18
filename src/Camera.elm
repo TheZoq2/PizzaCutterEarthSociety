@@ -4,59 +4,73 @@ import Set exposing (Set)
 import Math.Vector3 as Vec3 exposing (vec3, Vec3)
 import Math.Matrix4 as Mat4 exposing (Mat4)
 
+import Config
+
 type alias Camera =
     { base : Vec3
-    , lookingAt : Vec3
+    , lookAt : Vec3
+    , height : Float
     }
 
-bladeCoordInWorld : Mat4 -> Vec3 -> Vec3
-bladeCoordInWorld bladeMat bladeCoord =
-    Mat4.transform bladeMat bladeCoord
-
-pan : Mat4 -> Vec3 -> Camera -> Camera
-pan bladeMat change camera =
-    let ch = bladeCoordInWorld bladeMat change
-    in { camera | lookingAt = Vec3.add camera.lookingAt ch}
-
-panGlobal : Vec3 -> Camera -> Camera
-panGlobal change camera = { camera | lookingAt = Vec3.add camera.lookingAt change }
 
 type alias Input =
     { move : Vec3
     , lookMove : Vec3
+    , lookRotate : Float
+    , height : Float
     }
 
 inputBase : Input
 inputBase = { move = (vec3 0 0 0)
-            , lookMove = (vec3 0 0 0) }
+            , lookMove = (vec3 0 0 0)
+            , lookRotate = 0
+            , height = 0 }
 
-f : String -> Input -> Input
-f s d = case s of
-            "KeyA" -> { d | move = (vec3  0.1 0 0) }
-            "KeyD" -> { d | move = (vec3 -0.1 0 0) }
-            "KeyW" -> { d | move = (vec3 0  0.1 0) }
-            "KeyS" -> { d | move = (vec3 0 -0.1 0) }
-            "KeyJ" -> { d | lookMove = (vec3 -0.1 0 0) }
-            "KeyP" -> { d | lookMove = (vec3  0.1 0 0) }
-            "KeyC" -> { d | lookMove = (vec3 0  0.1 0) }
-            "KeyV" -> { d | lookMove = (vec3 0 -0.1 0) }
-            _ -> d
+rotate : Vec3 -> Vec3
+rotate v = vec3 (Vec3.getY v) -(Vec3.getX v) (Vec3.getZ v)
+
+f : Vec3 -> String -> Input -> Input
+f v s d =
+    case s of
+        "KeyS" -> { d | move = Vec3.negate v }
+        "KeyD" -> { d | move = Vec3.negate <| rotate v }
+        "KeyW" -> { d | move = v }
+        "KeyA" -> { d | move = rotate v }
+
+        "KeyC" -> { d | lookMove = Vec3.negate v }
+        "KeyV" -> { d | lookMove = v }
+        "KeyJ" -> { d | lookRotate = 0.1 }
+        "KeyP" -> { d | lookRotate = -0.1}
+
+        "Digit1" -> { d | height =  0.1 }
+        "Digit2" -> { d | height = -0.1 }
+        _ -> d
+
+
 
 update : Set String -> Camera -> Camera
 update set camera =
-    let inp = Set.foldl f inputBase set
+    let v   = Vec3.sub camera.lookAt camera.base
+        inp = Set.foldl (f <| Vec3.scale Config.cameraPanSpeed <| Vec3.normalize v) inputBase set
     in { camera
            | base = Vec3.add camera.base inp.move
-           , lookingAt = Vec3.add inp.move <| Vec3.add camera.lookingAt inp.lookMove
+           , lookAt = Vec3.add camera.base
+                      <| Mat4.transform (Mat4.makeRotate inp.lookRotate <| vec3 0 0 -1)
+                      <| Vec3.add inp.lookMove
+                      <| Vec3.add inp.move v
+           , height = camera.height + inp.height
        }
+
+
+
 
 
 lookAtMatrix : Camera -> Mat4
 lookAtMatrix camera =
     Mat4.makeLookAt
-         (Vec3.add camera.base <| vec3 0 0 -1)
-         camera.lookingAt
-         (vec3 0 0 -1)
+        (cameraPos camera)
+        camera.lookAt
+        (vec3 0 0 -1)
 
 cameraPos : Camera -> Vec3
-cameraPos camera = Vec3.add camera.base (vec3 0 0 -1)
+cameraPos camera = Vec3.add camera.base <| Vec3.scale camera.height <| Vec3.negate Vec3.k

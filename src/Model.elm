@@ -27,5 +27,6 @@ type alias Model =
     , units : List Unit
     , cursor : Maybe Vec3
     , selected : Maybe Selected
-    , buildings : List Building
+    , buildings : Dict Int Building
+    , nextBuildingId : Int
     }

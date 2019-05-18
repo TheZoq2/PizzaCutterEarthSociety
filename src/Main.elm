@@ -47,8 +47,9 @@ init =
     , units = [newUnit (vec3 0.5 0 0), newUnit (vec3 0 0.5 0)]
     , cursor = Nothing
     , selected = Nothing
-    , camera = Camera (vec3 0 0 0) (vec3 0 0 0)
-    , buildings = []
+    , buildings = Dict.empty
+    , nextBuildingId = 0
+    , camera = Camera (vec3 1 0 0) (vec3 0 0 0) 1
     }
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -130,20 +131,27 @@ tryBuildBuilding : (Int, Int) -> Building.Kind -> List Int -> Model -> Model
 tryBuildBuilding mousePos kind units model =
     let
         pos = List.head <| cutterMouseIntersections model mousePos
+        id = model.nextBuildingId
     in
         case pos of
             Just position ->
                 {model
-                    | buildings = model.buildings ++ [newBuilding kind position]
+                    | buildings =
+                        Dict.insert id (newBuilding kind position) model.buildings
+                    , nextBuildingId = model.nextBuildingId + 1
                     , selected = Nothing
-                    , units = commandSelectedUnits position model.selected model.units
+                    , units =
+                        commandSelectedUnits
+                            (Unit.BuildBuilding id)
+                            model.selected
+                            model.units
                 }
             Nothing ->
                 model
 
 
 
-commandSelectedUnits : Vec3 -> Maybe Selected -> List Unit -> List Unit
+commandSelectedUnits : Unit.Goal -> Maybe Selected -> List Unit -> List Unit
 commandSelectedUnits goal selected units =
     case selected of
         Just (SUnit indices _) ->
@@ -175,7 +183,7 @@ onRightClick model =
                     List.indexedMap
                         (\index unit ->
                             if List.member index selectedUnits then
-                                {unit | goal = goalUnwraped}
+                                {unit | goal = Unit.MoveTo goalUnwraped}
                             else
                                 unit
                         )
@@ -187,35 +195,48 @@ onRightClick model =
 
 updateUnits : Float -> Model -> Model
 updateUnits elapsedTime model =
-    {model | units = List.map (Unit.moveTowardsGoal elapsedTime) model.units}
+    {model | units = List.map (Unit.moveTowardsGoal elapsedTime model.buildings) model.units}
 
 
 updateBuildings : Float -> Model -> Model
 updateBuildings elapsedTime model =
-    -- let
-    --     buildingFn building units =
-    --         let
-    --             distance = Vec3.distance building.position unitPos
-    --             status = if distance < Config.buildRadius then
-    --                 case building.status of
-    --                     Building.Unbuilt progress ->
-    --                         if progress > 1 then
-    --                             Building.Done
-    --                         else
-    --                             Building.Unbuilt (progress + (elapsedTime / Config.buildTime))
-    --                     a -> a
-    --                 else
-    --                     building.status
-    --         in
-    --             {building | status = status}
+    let
+        buildingFn units index building =
+            let
+                -- Filter all buildings that 
+                buildingUnits =
+                    List.length
+                     <| List.filter
+                        (\{position, goal} ->
+                            let
+                                distance = Vec3.distance building.position position
+                            in
+                                (distance < Config.buildRadius)
+                                &&
+                                (goal == Unit.BuildBuilding index)
+                        )
+                        units
 
-    --     newBuildings =
-    --         List.map
-    --             (\{position} -> List.map (buildingFn position) model.buildings)
-    --             model.units
-    -- in
-    --     {model | buildings = newBuildings}
-    model
+                _ = Debug.log "buildingUnits" buildingUnits
+
+                status =
+                    case building.status of
+                        Building.Unbuilt progress ->
+                            if progress > 1 then
+                                Building.Done
+                            else
+                                Building.Unbuilt
+                                    (progress + (elapsedTime / Config.buildTime) * toFloat buildingUnits)
+                        a -> a
+            in
+                {building | status = status}
+
+        newBuildings =
+            Dict.map
+                (buildingFn model.units)
+                model.buildings
+    in
+        {model | buildings = newBuildings}
 
 
 cutterMouseIntersections : Model -> (Int, Int) -> List Vec3
@@ -386,7 +407,7 @@ view model =
                 |> List.map (\{position} -> Mat4.mul bladeRotation (Mat4.makeTranslate position))
                 |> List.map (renderMesh (cubeMesh (vec3 0.05 0.05 0.2) (vec3 1 0 0)))
             )
-            ++ (List.map drawBuilding model.buildings)
+            ++ (List.map drawBuilding <| Dict.values model.buildings)
 
         onDown =
             { stopPropagation = True, preventDefault = True }
@@ -410,7 +431,7 @@ view model =
                 ( renderedBlade ++
                   [ renderMesh pizzaCutterHandleMesh <| Mat4.makeTranslate3 0 1 0
                   , renderMesh (cubeMesh (vec3 0.1 0.1 0.1) (vec3 1 1 1)) <| Mat4.makeTranslate model.camera.base
-                  , renderMesh (cubeMesh (vec3 0.1 0.1 0.1) (vec3 0 0 0)) <| Mat4.makeTranslate model.camera.lookingAt
+                  , renderMesh (cubeMesh (vec3 0.1 0.1 0.1) (vec3 0 0 0)) <| Mat4.makeTranslate model.camera.lookAt
                   ] ++
                   discObjects
                 )
