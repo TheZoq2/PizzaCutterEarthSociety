@@ -13,13 +13,15 @@ import Html.Attributes exposing (width, height, style)
 import WebGL exposing (Mesh, Shader)
 import WebGL.Settings as Settings
 import WebGL.Settings.DepthTest as DepthTest
+import WebGL.Texture as Texture exposing (Texture)
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector3 as Vec3 exposing (vec3, Vec3)
 import Json.Decode as D exposing (Value)
+import Dict
+import Task
+
 import Selection exposing (intersections, CameraParameters)
 import Meshes exposing (..)
-
-import Dict
 
 import Model exposing (Model)
 import Msg exposing (Msg (..))
@@ -51,6 +53,9 @@ update message model =
                     { model | intersections = cutterMouseIntersections model (x, y) }
                 MouseMove x y ->
                     { model | mousePos = Just (x, y)}
+                TextureLoaded textureResult ->
+                    let _ = Debug.log "texture loaded" textureResult
+                    in model
     in (next_model, Cmd.none)
 
 
@@ -109,7 +114,7 @@ subscriptions model =
 main : Program D.Value Model Msg
 main =
     Browser.element
-        { init = \_ -> ( init, Cmd.none )
+        { init = \_ -> ( init, Task.attempt TextureLoaded (Texture.load "../textures/aluminium.jpg") )
         , view = view
         , subscriptions = subscriptions
         , update = update
