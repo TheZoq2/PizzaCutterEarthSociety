@@ -5,14 +5,17 @@ module Main exposing (main)
 -}
 
 import Browser
-import Browser.Events exposing (onAnimationFrameDelta, onKeyUp, onKeyDown)
+import Browser.Events exposing (onAnimationFrameDelta, onKeyUp, onKeyDown, onMouseDown)
 
+import Browser.Events exposing (onAnimationFrameDelta, onMouseDown)
 import Html exposing (Html)
 import Html.Attributes exposing (width, height, style)
 import WebGL exposing (Mesh, Shader)
+import WebGL.Settings as Settings
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector3 as Vec3 exposing (vec3, Vec3)
-import Json.Decode as D
+import Json.Decode as D exposing (Value)
+import Selection exposing (intersections, CameraParameters)
 
 import Dict
 
@@ -22,21 +25,49 @@ import Msg exposing (Msg (..))
 import Key
 import Camera
 
+viewportSize : (Int, Int)
+viewportSize = (400, 400)
+
 init : Model
 init = { time = 0
        , keys = Dict.empty
        , theta = 3.0
+       , pointer = (vec3 0 0 0)
        }
 
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update message model =
-    let next_model =
+    let
+        next_model =
             case message of
                 Tick elapsed -> { model | time  = model.time + elapsed }
                 TimeDelta d  -> { model | theta = model.theta + Camera.posDelta model.keys d }
                 KeyChange status str -> { model | keys = Key.update str status model.keys }
+                MouseDown x y ->
+                    let
+                        _ = Debug.log "mousedown" (x, y)
+
+                        t = model.theta
+
+                        invertedViewMatrix = (Mat4.inverseOrthonormal <| lookAtMatrix t)
+                        params = CameraParameters
+                            (cameraPos t)
+                            invertedViewMatrix
+                            perspectiveMatrix
+                            viewportSize
+
+                        (intersected, point) = intersections (x, y) params [triangle]
+
+                        _ = Debug.log "Hit: " intersected
+                    in
+                        { model | pointer = point }
     in (next_model, Cmd.none)
+
+
+mouseDecoder : D.Decoder Msg
+mouseDecoder =
+    D.map2 MouseDown (D.field "clientX" D.int) (D.field "clientY" D.int)
 
 
 subscriptions : Model -> Sub Msg
@@ -46,7 +77,9 @@ subscriptions model =
         , onKeyUp   <| Key.decoder KeyChange Key.Up
         , onKeyDown <| Key.decoder KeyChange Key.Down
         , onAnimationFrameDelta TimeDelta
+        , onMouseDown mouseDecoder
         ]
+
 
 main : Program D.Value Model Msg
 main =
@@ -60,35 +93,70 @@ main =
 
 view : Model -> Html msg
 view model =
+    let
+        settings = [Settings.cullFace Settings.back]
+    in
     WebGL.toHtml
         [ width 400
         , height 400
         , style "display" "block"
+        , style "background-color" "black"
         ]
-    [ WebGL.entity
+        [ WebGL.entityWith
+            settings
             vertexShader
             fragmentShader
             pizzaCutterBladeMesh
-            { modelViewProjection = perspective model
+            { modelViewProjection = perspective model.theta
             , modelMatrix = Mat4.identity
             }
-    , WebGL.entity
-        vertexShader
-        fragmentShader
-        pizzaCutterHandleMesh
-        { modelViewProjection = perspective model
-        , modelMatrix = Mat4.identity
-        }
-    ]
+        , WebGL.entityWith
+            settings
+            vertexShader
+            fragmentShader
+            pizzaCutterHandleMesh
+            { modelViewProjection = perspective model.theta
+            , modelMatrix = Mat4.identity
+            }
+        , WebGL.entityWith
+            settings
+            vertexShader
+            fragmentShader
+            mesh
+            { modelViewProjection = perspective model.theta
+            , modelMatrix = Mat4.identity
+            }
+        , WebGL.entityWith
+            settings
+            vertexShader
+            fragmentShader
+            pointerMesh
+            (let translation = Mat4.makeTranslate model.pointer
+             in { modelViewProjection = Mat4.mul (perspective model.theta) translation
+                , modelMatrix = translation
+                })
+        ]
 
-perspective : Model -> Mat4
-perspective m =
+cameraPos : Float -> Vec3
+cameraPos t = vec3 (4 * cos t) 0 (4 * sin t)
+
+lookAtMatrix : Float -> Mat4
+lookAtMatrix t =
+    (Mat4.makeLookAt
+         (cameraPos t) -- eye
+         (vec3 0 0 0) -- center
+         (vec3 0 1 0)) -- up
+
+perspectiveMatrix : Mat4
+perspectiveMatrix = Mat4.makePerspective 45 1 0.01 50
+
+-- TODO: Rename to avoid conflicts with perspectiveMatrix, or rename perspectiveMatrix
+-- to projection
+perspective : Float -> Mat4
+perspective t =
     Mat4.mul
-        (Mat4.makePerspective 45 1 0.01 100)
-        (Mat4.makeLookAt
-             (vec3 (4 * cos m.theta) 0 (4 * sin m.theta)) -- eye
-             (vec3 0 0 0) -- center
-             (vec3 0 1 0)) -- up
+        (perspectiveMatrix)
+        (lookAtMatrix (t))
 
 
 
@@ -102,6 +170,12 @@ type alias Vertex =
     }
 
 
+-- TODO: This needs to be synced with mesh at some point
+
+triangle : (Vec3, Vec3, Vec3)
+triangle =
+    (vec3 0 0 0, vec3 1 1 0, vec3 1 -1 0)
+
 mesh : Mesh Vertex
 mesh =
     let normal = vec3 0 0 1
@@ -112,6 +186,15 @@ mesh =
           )
         ]
 
+pointerMesh : Mesh Vertex
+pointerMesh =
+    let normal = vec3 0 0 1
+    in WebGL.triangles
+        [ ( Vertex (vec3 0 0 0) normal (vec3 1 0 0)
+          , Vertex (vec3 0.4 0.4 0) normal (vec3 0 1 0)
+          , Vertex (vec3 0.4 -0.4 0) normal (vec3 0 0 1)
+          )
+        ]
 
 circleVertexPositions : Float -> Int -> List Vec3
 circleVertexPositions radius numberOfSegments =
@@ -228,3 +311,8 @@ fragmentShader =
         }
 
     |]
+
+
+
+
+
