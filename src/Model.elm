@@ -1,4 +1,4 @@
-module Model exposing (Model, Selected(..), UnitTool, Building, allBuildings, buildingName)
+module Model exposing (Model, Selected(..), UnitTool(..))
 
 import Math.Vector3 as Vec3 exposing (vec3, Vec3)
 import Dict exposing (Dict)
@@ -8,23 +8,11 @@ import Set exposing (Set)
 import Key
 import Unit exposing (Unit)
 import Camera exposing (Camera)
+import Building exposing (Building)
 
-
-type Building
-    = Green
-    | Blue
-
-allBuildings = [Green, Blue]
-
-
-buildingName : Building -> String
-buildingName building =
-    case building of
-        Green -> "Green"
-        Blue -> "Blue"
 
 type UnitTool
-    = Build Building
+    = Build Building.Kind
 
 type Selected
     = SUnit (List Int) (Maybe UnitTool)
@@ -39,4 +27,5 @@ type alias Model =
     , units : List Unit
     , cursor : Maybe Vec3
     , selected : Maybe Selected
+    , buildings : List Building
     }

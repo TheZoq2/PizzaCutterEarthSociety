@@ -8,6 +8,7 @@ import Browser
 import Browser.Events exposing (onAnimationFrameDelta, onKeyUp, onKeyDown, onMouseDown, onMouseMove)
 import Browser.Events exposing (onAnimationFrameDelta, onMouseDown)
 import Html exposing (Html)
+import Html.Events
 import Html.Attributes exposing (width, height, style)
 import Html.Events.Extra.Mouse as Mouse
 import WebGL exposing (Mesh, Shader)
@@ -28,7 +29,8 @@ import Set exposing (Set)
 import Meshes exposing (..)
 import Unit exposing (Unit, newUnit)
 import Selection exposing (intersections, CameraParameters)
-import Model exposing (Model, Selected(..), buildingName, allBuildings)
+import Model exposing (Model, Selected(..), UnitTool(..))
+import Building exposing (buildingName, allBuildings, newBuilding)
 import Msg exposing (Msg (..))
 import Key
 import Camera
@@ -45,7 +47,8 @@ init =
     , units = [newUnit (vec3 0.5 0 0), newUnit (vec3 0 0.5 0)]
     , cursor = Nothing
     , selected = Nothing
-       , camera = Camera (vec3 0 0 0) (vec3 0 0 0)
+    , camera = Camera (vec3 0 0 0) (vec3 0 0 0)
+    , buildings = []
     }
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -79,6 +82,12 @@ update message model =
                 TextureLoaded file err ->
                     let _ = Debug.log ("Could not load texture" ++ file) err
                     in model
+                OnBuildingButton kind ->
+                    case model.selected of
+                        Just (SUnit units _) ->
+                            { model | selected = Just (SUnit units (Just (Build kind)))}
+                        _ ->
+                            Debug.log "Warning: building button clicked without unit" model
     in (next_model, Cmd.none)
 
 
@@ -87,6 +96,19 @@ onLeftClick : Model -> Model
 onLeftClick model =
     let
         mousePos = Maybe.withDefault (0, 0) model.mousePos
+    in
+        case model.selected of
+            Nothing ->
+                trySelect mousePos model
+            Just (SUnit _ Nothing) ->
+                trySelect mousePos model
+            Just (SUnit _ (Just (Build buildingKind))) ->
+                tryBuildBuilding mousePos buildingKind model
+
+
+trySelect : (Int, Int) -> Model -> Model
+trySelect mousePos model =
+    let
         selected =
             List.filterMap (\(hit, index) -> if hit then Just index else Nothing)
              <| List.indexedMap
@@ -103,6 +125,21 @@ onLeftClick model =
                 model.units
     in
         { model | selected = Maybe.map (\id -> SUnit [id] Nothing) <| List.head selected }
+
+tryBuildBuilding : (Int, Int) -> Building.Kind -> Model -> Model
+tryBuildBuilding mousePos kind model =
+    let
+        pos = List.head <| cutterMouseIntersections model mousePos
+    in
+        case pos of
+            Just position ->
+                {model
+                    | buildings = model.buildings ++ [newBuilding kind position]
+                    , selected = Nothing
+                }
+            Nothing ->
+                model
+
 
 
 
@@ -281,6 +318,17 @@ view model =
                     ]
                 Nothing -> []
 
+        drawBuilding {position, kind} =
+            let
+                color =
+                    case kind of
+                        Building.Green -> vec3 0 1 0
+                        Building.Blue -> vec3 0 0 1
+            in
+                renderMesh
+                    (cubeMesh (vec3 0.1 0.1 0.1) color)
+                    (Mat4.mul bladeRotation (Mat4.makeTranslate position))
+
         discObjects =
             cursor
             ++
@@ -288,6 +336,7 @@ view model =
                 |> List.map (\{position} -> Mat4.mul bladeRotation (Mat4.makeTranslate position))
                 |> List.map (renderMesh (cubeMesh (vec3 0.05 0.05 0.2) (vec3 1 0 0)))
             )
+            ++ (List.map drawBuilding model.buildings)
 
         onDown =
             { stopPropagation = True, preventDefault = True }
@@ -325,7 +374,11 @@ buildMenu : Model -> Html Msg
 buildMenu model =
     let
         buildingButton building =
-            Html.div [] [Html.div [] [Html.button [] [Html.text <| buildingName building]]]
+            Html.div
+                []
+                [Html.button
+                    [Html.Events.onClick (OnBuildingButton building)]
+                    [Html.text <| buildingName building]]
     in
     case model.selected of
         Just (SUnit _ _) ->
