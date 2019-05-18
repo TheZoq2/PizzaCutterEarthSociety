@@ -54,9 +54,9 @@ update set camera =
 lookAtMatrix : Camera -> Mat4
 lookAtMatrix camera =
     Mat4.makeLookAt
-         (Vec3.add camera.base <| vec3 0 0 -1)
-         camera.lookingAt
-         (vec3 0 0 -1)
+        (cameraPos camera)
+        camera.lookingAt
+        (vec3 0 1 0)
 
 cameraPos : Camera -> Vec3
 cameraPos camera = Vec3.add camera.base (vec3 0 0 -1)
