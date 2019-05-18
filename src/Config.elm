@@ -4,6 +4,8 @@ import Math.Vector3 as Vec3 exposing (vec3)
 
 unitSpeed = 1
 unitSize = vec3 0.1 0.1 0.2
+buildRadius = 0.1
+buildTime = 5
 
 angularDivider = 10
 

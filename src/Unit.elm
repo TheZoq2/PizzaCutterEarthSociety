@@ -1,4 +1,4 @@
-module Unit exposing (Unit, moveTowardsGoal, newUnit)
+module Unit exposing (Unit, moveTowardsGoal, newUnit, setGoal)
 
 import Math.Vector3 as Vec3 exposing (vec3, Vec3)
 
@@ -30,3 +30,6 @@ moveTowardsGoal elapsedTime unit =
         else
             {unit | position = unit.goal}
 
+
+setGoal : Vec3 -> Unit -> Unit
+setGoal goal unit = {unit | goal = goal}

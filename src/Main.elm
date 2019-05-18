@@ -57,8 +57,8 @@ update message model =
         next_model =
             case message of
                 Tick elapsed ->
-                    updateUnits
-                        (elapsed / 1000)
+                    updateBuildings (elapsed / 1000)
+                     <| updateUnits (elapsed / 1000)
                         { model
                             | time = model.time + elapsed
                             , cursor = Maybe.andThen
@@ -102,8 +102,8 @@ onLeftClick model =
                 trySelect mousePos model
             Just (SUnit _ Nothing) ->
                 trySelect mousePos model
-            Just (SUnit _ (Just (Build buildingKind))) ->
-                tryBuildBuilding mousePos buildingKind model
+            Just (SUnit units (Just (Build buildingKind))) ->
+                tryBuildBuilding mousePos buildingKind units model
 
 
 trySelect : (Int, Int) -> Model -> Model
@@ -126,8 +126,8 @@ trySelect mousePos model =
     in
         { model | selected = Maybe.map (\id -> SUnit [id] Nothing) <| List.head selected }
 
-tryBuildBuilding : (Int, Int) -> Building.Kind -> Model -> Model
-tryBuildBuilding mousePos kind model =
+tryBuildBuilding : (Int, Int) -> Building.Kind -> List Int -> Model -> Model
+tryBuildBuilding mousePos kind units model =
     let
         pos = List.head <| cutterMouseIntersections model mousePos
     in
@@ -136,12 +136,26 @@ tryBuildBuilding mousePos kind model =
                 {model
                     | buildings = model.buildings ++ [newBuilding kind position]
                     , selected = Nothing
+                    , units = commandSelectedUnits position model.selected model.units
                 }
             Nothing ->
                 model
 
 
 
+commandSelectedUnits : Vec3 -> Maybe Selected -> List Unit -> List Unit
+commandSelectedUnits goal selected units =
+    case selected of
+        Just (SUnit indices _) ->
+            List.indexedMap
+                (\i unit ->
+                    if List.member i indices then
+                        Unit.setGoal goal unit
+                    else
+                        unit
+                )
+                units
+        _ -> units
 
 onRightClick : Model -> Model
 onRightClick model =
@@ -174,6 +188,34 @@ onRightClick model =
 updateUnits : Float -> Model -> Model
 updateUnits elapsedTime model =
     {model | units = List.map (Unit.moveTowardsGoal elapsedTime) model.units}
+
+
+updateBuildings : Float -> Model -> Model
+updateBuildings elapsedTime model =
+    -- let
+    --     buildingFn building units =
+    --         let
+    --             distance = Vec3.distance building.position unitPos
+    --             status = if distance < Config.buildRadius then
+    --                 case building.status of
+    --                     Building.Unbuilt progress ->
+    --                         if progress > 1 then
+    --                             Building.Done
+    --                         else
+    --                             Building.Unbuilt (progress + (elapsedTime / Config.buildTime))
+    --                     a -> a
+    --                 else
+    --                     building.status
+    --         in
+    --             {building | status = status}
+
+    --     newBuildings =
+    --         List.map
+    --             (\{position} -> List.map (buildingFn position) model.buildings)
+    --             model.units
+    -- in
+    --     {model | buildings = newBuildings}
+    model
 
 
 cutterMouseIntersections : Model -> (Int, Int) -> List Vec3
@@ -318,16 +360,24 @@ view model =
                     ]
                 Nothing -> []
 
-        drawBuilding {position, kind} =
+        drawBuilding {position, kind, status} =
             let
+                size = 0.1
                 color =
                     case kind of
                         Building.Green -> vec3 0 1 0
                         Building.Blue -> vec3 0 0 1
+
+                fullPosition =
+                    case status of
+                        Building.Unbuilt progress ->
+                            Vec3.add position (vec3 0 0 ((1-progress) * size/2))
+                        _ ->
+                            position
             in
                 renderMesh
-                    (cubeMesh (vec3 0.1 0.1 0.1) color)
-                    (Mat4.mul bladeRotation (Mat4.makeTranslate position))
+                    (cubeMesh (vec3 size size size) color)
+                    (Mat4.mul bladeRotation (Mat4.makeTranslate fullPosition))
 
         discObjects =
             cursor
