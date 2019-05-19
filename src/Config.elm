@@ -8,6 +8,7 @@ buildingSize = vec3 0.05 0.05 0.05
 buildRadius = 0.1
 buildTime : Float
 buildTime = 5.0
+resourcesPerTrip = 0.1
 
 angularDivider = 50
 

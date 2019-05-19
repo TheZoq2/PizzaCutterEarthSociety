@@ -11,6 +11,7 @@ import Camera exposing (Camera)
 import Building exposing (Building)
 import Resource exposing (ResourceSite)
 import ModelChange exposing (ModelChange)
+import Config
 
 
 type UnitTool
@@ -43,20 +44,20 @@ type alias Model =
 applyModelChange : ModelChange -> Model -> Model
 applyModelChange change model =
     let
-        reduceResourceSite amount (index, site) =
-            let _ = Debug.log "" site.depletion in
-            if site.depletion < 1 then
-                Just (index, { site | depletion = site.depletion + amount})
+        reduceResourceSite target amount (index, site) =
+            if target == index then
+                if site.depletion < 1 then
+                    Just (index, { site | depletion = site.depletion + amount})
+                else
+                    Nothing
             else
-                Nothing
-
-        _ = Debug.log "Applying model change" change
+                Just (index, site)
     in
     case change of
         ModelChange.ReduceResourceStock index ->
             let
                 newSites = Dict.fromList
-                    <| List.filterMap (reduceResourceSite 0.05)
+                    <| List.filterMap (reduceResourceSite index Config.resourcesPerTrip)
                     <| Dict.toList model.resourceSites
             in
                 { model | resourceSites = newSites }
