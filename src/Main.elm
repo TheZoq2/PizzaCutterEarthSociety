@@ -421,22 +421,6 @@ view model =
               Nothing ->
                   []
 
-        renderedNorway =
-            case Dict.get "norway" model.textures of
-              Just texture ->
-                  [ renderBillboardMesh (Mat4.translate3 1.0 0.3 0 <| Mat4.makeScale3 0.1 0.1 0.1) texture ]
-              Nothing ->
-                  []
-
-        cursor =
-            case model.cursor of
-                Just pos ->
-                    [ renderMesh
-                        (cubeMesh (vec3 0.1 0.1 0.1) (vec3 0 1 0))
-                        (Mat4.mul bladeRotation (Mat4.makeTranslate pos))
-                    ]
-                Nothing -> []
-
         drawBuilding {position, kind, status} =
             let
                 size = Config.buildingSize
@@ -457,8 +441,6 @@ view model =
                     (Mat4.mul bladeRotation (Mat4.makeTranslate fullPosition))
 
         discObjects =
-            cursor
-            ++
             ( model.units
                 |> List.map (\{position} -> Mat4.mul bladeRotation (Mat4.makeTranslate position))
                 |> List.map (renderMesh (cubeMesh Config.unitSize (vec3 1 0 0)))
@@ -489,8 +471,7 @@ view model =
                 ( renderedBlade ++
                   [ renderMesh pizzaCutterHandleMesh <| Mat4.makeTranslate3 0 1 0
                   ] ++
-                  discObjects ++
-                  renderedNorway
+                  discObjects
                 )
             ]
             ++
