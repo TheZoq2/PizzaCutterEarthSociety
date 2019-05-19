@@ -9,6 +9,7 @@ import Key
 import Unit exposing (Unit)
 import Camera exposing (Camera)
 import Building exposing (Building)
+import Resource exposing (ResourceSite)
 
 
 type UnitTool
@@ -30,4 +31,6 @@ type alias Model =
     , selected : Maybe Selected
     , buildings : Dict Int Building
     , nextBuildingId : Int
+    , resourceSites : Dict Int ResourceSite
+    , nextResourceId : Int
     }

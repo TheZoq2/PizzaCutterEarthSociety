@@ -3,18 +3,18 @@ module Building exposing (..)
 import Math.Vector3 as Vec3 exposing (vec3, Vec3)
 
 type Kind
-    = Green
-    | Blue
+    = House
+    | Depot
 
 
-allBuildings = [Green, Blue]
+allBuildings = [House, Depot]
 
 
 buildingName : Kind -> String
 buildingName building =
     case building of
-        Green -> "Green"
-        Blue -> "Blue"
+        House -> "House"
+        Depot -> "Resource depot"
 
 
 type Status
@@ -31,3 +31,13 @@ type alias Building =
 newBuilding : Kind -> Vec3 -> Building
 newBuilding kind position =
     Building (Unbuilt 0) kind position
+
+
+
+closestDepot: Vec3 -> List Building -> Maybe Vec3
+closestDepot pos buildings =
+    List.head
+        <| List.map Tuple.second
+        <| List.sortBy Tuple.first
+        <| List.map (\{position} -> (Vec3.distance position pos, position))
+        <| List.filter (\{kind} -> kind == Depot) buildings

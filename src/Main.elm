@@ -33,6 +33,7 @@ import Msg exposing (Msg (..))
 import Key
 import Camera exposing (Camera, lookAtMatrix, cameraPos)
 import Config
+import Resource exposing (newResourceSite, resourceSiteMeshes)
 
 init : Model
 init =
@@ -47,6 +48,8 @@ init =
     , buildings = Dict.empty
     , nextBuildingId = 0
     , camera = Camera (vec3 1 0 0) (vec3 0 0 0) 1
+    , resourceSites = Dict.fromList [(0, newResourceSite Resource.Food (vec3 -0.5 0 0))]
+    , nextResourceId = 1
     }
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -110,38 +113,40 @@ onLeftClick model =
                 trySelect mousePos model
 
 
+cubeSelection : Model -> (Int, Int) -> Vec3 -> List (a, Vec3) -> List a
+cubeSelection model mousePos size selectionOptions =
+    List.filterMap (\(hit, a) -> if hit then Just a else Nothing)
+        <| List.map
+            (\(a, position) ->
+                ( mouseIntersections
+                    (Meshes.cubeTriangles size)
+                    position
+                    model
+                    mousePos
+                    |> List.isEmpty |> not
+                , a
+                )
+            )
+            selectionOptions
+
+
 trySelect : (Int, Int) -> Model -> Model
 trySelect mousePos model =
     let
         selectedUnits =
-            List.filterMap (\(hit, index) -> if hit then Just index else Nothing)
-             <| List.indexedMap
-                (\index {position} ->
-                    ( mouseIntersections
-                        (Meshes.cubeTriangles Config.unitSize)
-                        position
-                        model
-                        mousePos
-                        |> List.isEmpty |> not
-                    , index
-                    )
-                )
-                model.units
+            cubeSelection
+                model
+                mousePos
+                Config.unitSize
+                <| List.indexedMap (\i {position} -> (i, position)) model.units
 
         selectedBuildings =
-            List.filterMap (\(hit, index) -> if hit then Just index else Nothing)
-             <| List.map
-                (\(index, {position}) ->
-                    ( mouseIntersections
-                        (Meshes.cubeTriangles Config.buildingSize)
-                        position
-                        model
-                        mousePos
-                        |> List.isEmpty |> not
-                    , index
-                    )
-                )
-                <| Dict.toList model.buildings
+            cubeSelection
+                model
+                mousePos
+                Config.buildingSize
+                <| List.map (\(i, {position}) -> (i, position))
+                <| Dict.toList (model.buildings)
 
         selectedUnit = Maybe.map (\id -> SUnit [id] Nothing) <| List.head selectedUnits
         selectedBuilding = Maybe.map (\id -> SBuilding id) <| List.head selectedBuildings
@@ -191,13 +196,39 @@ commandSelectedUnits goal selected units =
                 units
         _ -> units
 
+
+priorityMaybe : List (Maybe a) -> Maybe a
+priorityMaybe options =
+    List.foldl (\option acc ->
+        case acc of
+            Just a -> Just a
+            Nothing ->
+                case option of
+                    Just a -> Just a
+                    Nothing -> Nothing
+        ) Nothing options
+
 onRightClick : Model -> Model
 onRightClick model =
     let
-        goal =
-            Maybe.andThen
-                (\pos -> List.head <| cutterMouseIntersections model pos)
-                model.mousePos
+        mousePos = Maybe.withDefault (0,0) model.mousePos
+
+        moveGoal =
+            Maybe.map Unit.MoveTo <| List.head <| cutterMouseIntersections model mousePos
+
+        selectedResourceSite =
+            Maybe.map (Unit.Gather)
+                <| List.head
+                    <| cubeSelection
+                        model
+                        mousePos
+                        Config.buildingSize
+                        <| List.map (\(i, {position}) -> (i, position))
+                        <| Dict.toList (model.resourceSites)
+
+        _ = Debug.log "selectedResourceSite" selectedResourceSite
+
+        goal = priorityMaybe [selectedResourceSite, moveGoal]
 
         selectedUnits = case model.selected of
             Just (SUnit indexes _) -> indexes
@@ -209,7 +240,7 @@ onRightClick model =
                     List.indexedMap
                         (\index unit ->
                             if List.member index selectedUnits then
-                                {unit | goal = Unit.MoveTo goalUnwraped}
+                                {unit | goal = goalUnwraped}
                             else
                                 unit
                         )
@@ -221,7 +252,13 @@ onRightClick model =
 
 updateUnits : Float -> Model -> Model
 updateUnits elapsedTime model =
-    {model | units = List.map (Unit.moveTowardsGoal elapsedTime model.buildings) model.units}
+    let
+        (units, changes) = List.unzip
+            <| List.map
+                (Unit.updateUnit elapsedTime model.buildings model.resourceSites)
+                model.units
+    in
+    {model | units = units}
 
 
 updateBuildings : Float -> Model -> Model
@@ -426,8 +463,8 @@ view model =
                 size = Config.buildingSize
                 color =
                     case kind of
-                        Building.Green -> vec3 0 1 0
-                        Building.Blue -> vec3 0 0 1
+                        Building.House -> vec3 0 1 0
+                        Building.Depot -> vec3 0 0 1
 
                 fullPosition =
                     case status of
@@ -440,12 +477,25 @@ view model =
                     (cubeMesh size color)
                     (Mat4.mul bladeRotation (Mat4.makeTranslate fullPosition))
 
+        drawResource {position, kind} =
+            let
+                meshes = resourceSiteMeshes kind
+            in
+                List.map
+                    (\mesh ->
+                        renderMesh
+                            mesh
+                            (Mat4.mul bladeRotation (Mat4.makeTranslate position))
+                    )
+                    meshes
+
         discObjects =
             ( model.units
                 |> List.map (\{position} -> Mat4.mul bladeRotation (Mat4.makeTranslate position))
                 |> List.map (renderMesh (cubeMesh Config.unitSize (vec3 1 0 0)))
             )
             ++ (List.map drawBuilding <| Dict.values model.buildings)
+            ++ (List.foldl (++) [] (List.map drawResource <| Dict.values model.resourceSites))
 
         onDown =
             { stopPropagation = True, preventDefault = True }
@@ -560,7 +610,7 @@ fragmentShader =
         varying vec3 worldPosition;
         varying vec3 worldNormal;
 
-        const vec3 lightDir = vec3(1.0, -1.0, 1.0);
+        const vec3 lightDir = vec3(1.0, -1.0, -1.0);
         const float ambientLight = 0.2;
 
         void main () {
