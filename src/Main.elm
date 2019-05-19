@@ -89,6 +89,10 @@ update message model =
                             { model | selected = Just (SUnit units (Just (Build kind)))}
                         _ ->
                             Debug.log "Warning: building button clicked without unit" model
+                BuildUnit building ->
+                    case Dict.get building model.buildings of
+                        Just {position} -> {model | units = model.units ++ [newUnit position]}
+                        Nothing -> model
     in (next_model, Cmd.none)
 
 
@@ -105,12 +109,14 @@ onLeftClick model =
                 trySelect mousePos model
             Just (SUnit units (Just (Build buildingKind))) ->
                 tryBuildBuilding mousePos buildingKind units model
+            Just (SBuilding _) ->
+                trySelect mousePos model
 
 
 trySelect : (Int, Int) -> Model -> Model
 trySelect mousePos model =
     let
-        selected =
+        selectedUnits =
             List.filterMap (\(hit, index) -> if hit then Just index else Nothing)
              <| List.indexedMap
                 (\index {position} ->
@@ -124,8 +130,31 @@ trySelect mousePos model =
                     )
                 )
                 model.units
+
+        selectedBuildings =
+            List.filterMap (\(hit, index) -> if hit then Just index else Nothing)
+             <| List.map
+                (\(index, {position}) ->
+                    ( mouseIntersections
+                        (Meshes.cubeTriangles Config.buildingSize)
+                        position
+                        model
+                        mousePos
+                        |> List.isEmpty |> not
+                    , index
+                    )
+                )
+                <| Dict.toList model.buildings
+
+        selectedUnit = Maybe.map (\id -> SUnit [id] Nothing) <| List.head selectedUnits
+        selectedBuilding = Maybe.map (\id -> SBuilding id) <| List.head selectedBuildings
+
+        finalSelection =
+            case selectedUnit of
+                Just s -> Just s
+                Nothing -> selectedBuilding
     in
-        { model | selected = Maybe.map (\id -> SUnit [id] Nothing) <| List.head selected }
+        { model | selected = finalSelection}
 
 tryBuildBuilding : (Int, Int) -> Building.Kind -> List Int -> Model -> Model
 tryBuildBuilding mousePos kind units model =
@@ -383,7 +412,7 @@ view model =
 
         drawBuilding {position, kind, status} =
             let
-                size = 0.1
+                size = Config.buildingSize
                 color =
                     case kind of
                         Building.Green -> vec3 0 1 0
@@ -392,12 +421,12 @@ view model =
                 fullPosition =
                     case status of
                         Building.Unbuilt progress ->
-                            Vec3.add position (vec3 0 0 ((1-progress) * size/2))
+                            Vec3.add position (vec3 0 0 ((1-progress) * (Vec3.getX size/2)))
                         _ ->
                             position
             in
                 renderMesh
-                    (cubeMesh (vec3 size size size) color)
+                    (cubeMesh size color)
                     (Mat4.mul bladeRotation (Mat4.makeTranslate fullPosition))
 
         discObjects =
@@ -405,7 +434,7 @@ view model =
             ++
             ( model.units
                 |> List.map (\{position} -> Mat4.mul bladeRotation (Mat4.makeTranslate position))
-                |> List.map (renderMesh (cubeMesh (vec3 0.05 0.05 0.2) (vec3 1 0 0)))
+                |> List.map (renderMesh (cubeMesh Config.unitSize (vec3 1 0 0)))
             )
             ++ (List.map drawBuilding <| Dict.values model.buildings)
 
@@ -453,10 +482,12 @@ buildMenu model =
         Just (SUnit _ _) ->
             -- Buildings
             let _ = Debug.log "processing selected" "" in
-            Html.ul []
+            Html.div []
                 <| List.map
                     buildingButton
                     allBuildings
+        Just (SBuilding id) ->
+            Html.div [] [Html.button [Html.Events.onClick (BuildUnit id)] [Html.text "Build unit"]]
         Nothing -> Html.div [] []
 
 

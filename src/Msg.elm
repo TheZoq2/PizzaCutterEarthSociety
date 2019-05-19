@@ -14,3 +14,4 @@ type Msg
     | MouseMove Int Int
     | TextureLoaded String (Result Texture.Error Texture)
     | OnBuildingButton Building.Kind
+    | BuildUnit Int

@@ -16,6 +16,7 @@ type UnitTool
 
 type Selected
     = SUnit (List Int) (Maybe UnitTool)
+    | SBuilding Int
 
 type alias Model =
     { time   : Float
