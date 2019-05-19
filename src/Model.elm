@@ -34,6 +34,7 @@ type alias Model =
     , nextBuildingId : Int
     , resourceSites : Dict Int ResourceSite
     , nextResourceId : Int
+    , resources : List (Resource.Kind, Int)
     }
 
 

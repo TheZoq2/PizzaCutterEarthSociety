@@ -50,6 +50,12 @@ init =
     , camera = Camera (vec3 1 0 0) (vec3 0 0 0) 1
     , resourceSites = Dict.fromList [(0, newResourceSite Resource.Food (vec3 -0.5 0 0))]
     , nextResourceId = 1
+    , resources =
+        [ (Resource.Food, 10)
+        , (Resource.Iron, 10)
+        , (Resource.Wood, 10)
+        , (Resource.Gold, 10)
+        ]
     }
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -528,7 +534,8 @@ view model =
                 )
             ]
             ++
-            [ buildMenu model
+            [ resourceDisplay model
+            , buildMenu model
             ]
 
 
@@ -552,6 +559,15 @@ buildMenu model =
         Just (SBuilding id) ->
             Html.div [] [Html.button [Html.Events.onClick (BuildUnit id)] [Html.text "Build unit"]]
         Nothing -> Html.div [] []
+
+
+resourceDisplay : Model -> Html Msg
+resourceDisplay model =
+    Html.div []
+        <| List.map (\t -> Html.span [] [Html.text t])
+        <| List.map
+            (\(resource, amount) -> (Resource.symbol resource) ++ ": " ++ (String.fromInt amount))
+        model.resources
 
 
 perspectiveMatrix : Mat4

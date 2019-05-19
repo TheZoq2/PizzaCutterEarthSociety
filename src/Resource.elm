@@ -1,4 +1,4 @@
-module Resource exposing (Kind(..), ResourceSite, newResourceSite, resourceSiteMeshes)
+module Resource exposing (Kind(..), ResourceSite, newResourceSite, resourceSiteMeshes, symbol)
 
 import Meshes exposing (..)
 
@@ -13,6 +13,19 @@ type Kind
     | Wood
     | Iron
     | Gold
+
+
+allResources : List Kind
+allResources = [Food, Wood, Iron, Gold]
+
+
+symbol : Kind -> String
+symbol kind =
+    case kind of
+        Food -> "🍎"
+        Wood -> "🌲"
+        Iron -> "🔨"
+        Gold -> "💍"
 
 
 
