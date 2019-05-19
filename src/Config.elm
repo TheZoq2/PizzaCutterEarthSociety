@@ -13,7 +13,7 @@ resourcesPerTrip = 0.1
 angularDivider = 50
 
 viewportSize : (Int, Int)
-viewportSize = (600, 600)
+viewportSize = (900, 900)
 
 
 cameraPanSpeed = 0.05

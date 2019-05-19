@@ -574,7 +574,13 @@ view model =
         , style "top" "0"
         , style "left" "0"
         ]
-        <| [ WebGL.toHtmlWith options
+        <|  [ Html.div [style "float" "right"]
+                [ Html.h3 [] [Html.text "Pizza Cutter Earth Society"]
+                , instructions
+                ]
+            ]
+            ++
+            [ WebGL.toHtmlWith options
                 [ width <| Tuple.first Config.viewportSize
                 , height <| Tuple.second Config.viewportSize
                 , style "display" "block"
@@ -592,6 +598,19 @@ view model =
             [ resourceDisplay model
             , buildMenu model
             ]
+
+
+instructions : Html Msg
+instructions =
+    Html.ul []
+        [ Html.li [] [Html.text "The game is a standard RTS"]
+        , Html.li [] [Html.text "Units are red"]
+        , Html.li [] [Html.text "Houses are green, they make more units"]
+        , Html.li [] [Html.text "Resources depots are blue, this is where units leave resources"]
+        , Html.li [] [Html.text "Click to select"]
+        , Html.li [] [Html.text "Right click to command"]
+        , Html.li [] [Html.text "Use WASD to move, JP to rotate and CV to rotate"]
+        ]
 
 
 buildMenu : Model -> Html Msg
