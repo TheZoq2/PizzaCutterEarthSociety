@@ -1,4 +1,4 @@
-module Resource exposing (Kind(..), ResourceSite, newResourceSite, resourceSiteMeshes, symbol)
+module Resource exposing (Kind(..), ResourceSite, newResourceSite, resourceSiteMeshes, symbol, allResources)
 
 import Meshes exposing (..)
 

@@ -35,6 +35,7 @@ type alias Model =
     , resourceSites : Dict Int ResourceSite
     , nextResourceId : Int
     , resources : List (Resource.Kind, Int)
+    , nextRandom : Float
     }
 
 

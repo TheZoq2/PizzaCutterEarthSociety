@@ -23,6 +23,9 @@ import Dict
 import Task
 import Platform.Cmd
 import Set exposing (Set)
+import Random
+import Random.List exposing (choose)
+import Time
 
 import Meshes exposing (..)
 import Unit exposing (Unit, newUnit)
@@ -56,11 +59,17 @@ init =
         , (Resource.Wood, 10)
         , (Resource.Gold, 10)
         ]
+    , nextRandom = 0
     }
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update message model =
     let
+        cmd =
+            case message of
+                SlowTick _ -> Random.generate NewRandom <| Random.pair (Random.float 0 1) (choose Resource.allResources)
+                _ -> Cmd.none
+
         next_model =
             case message of
                 Tick elapsed ->
@@ -99,7 +108,28 @@ update message model =
                     case Dict.get building model.buildings of
                         Just {position} -> {model | units = model.units ++ [newUnit position]}
                         Nothing -> model
-    in (next_model, Cmd.none)
+                NewRandom (val, (kind, _)) ->
+                    if val < 0.2 then
+                        let
+                            pos =
+                                worldCoordInBlade
+                                    (bladeMatrix model.time)
+                                    (vec3 (val / 0.2) 0 0)
+
+                            kind_ = Maybe.withDefault Resource.Gold kind
+                        in
+                            { model
+                                | resourceSites =
+                                    Dict.insert
+                                        model.nextResourceId
+                                        (newResourceSite kind_ pos)
+                                        model.resourceSites
+                                , nextResourceId = model.nextResourceId + 1
+                            }
+                    else
+                        model
+                SlowTick _ -> model
+    in (next_model, cmd)
 
 
 
@@ -375,6 +405,7 @@ subscriptions model =
         , onKeyDown <| Key.decoder KeyChange Key.Down
         , onAnimationFrameDelta TimeDelta
         , onMouseMove <| mouseDecoder MouseMove
+        , Time.every 1000 SlowTick
         ]
 
 
