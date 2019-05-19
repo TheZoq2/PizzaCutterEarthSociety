@@ -44,6 +44,20 @@ pizzaCutterBladeMesh =
             )
         |> WebGL.triangles
 
+type alias BillboardVertex = { position : Vec3, texCoords : Vec2 }
+
+billboardMesh : Mesh BillboardVertex
+billboardMesh =
+    WebGL.triangles
+        [ ( BillboardVertex (vec3 -0.5  0.5 0) (vec2 0 0)
+          , BillboardVertex (vec3  0.5  0.5 0) (vec2 1 0)
+          , BillboardVertex (vec3 -0.5 -0.5 0) (vec2 0 1)
+          )
+        , ( BillboardVertex (vec3 -0.5 -0.5 0) (vec2 0 1)
+          , BillboardVertex (vec3  0.5  0.5 0) (vec2 1 0)
+          , BillboardVertex (vec3  0.5 -0.5 0) (vec2 1 1)
+          )
+        ]
 
 cubeVertices : Vec3 -> Vec3 -> List ColoredVertex
 cubeVertices size color =

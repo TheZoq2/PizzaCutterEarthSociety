@@ -72,7 +72,7 @@ lookAtMatrix camera =
     Mat4.makeLookAt
         (cameraPos camera)
         camera.lookAt
-        (vec3 0 0 -1)
+        (vec3 0 1 0)
 
 cameraPos : Camera -> Vec3
 cameraPos camera = Vec3.add camera.base <| Vec3.scale camera.height <| Vec3.negate Vec3.k

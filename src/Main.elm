@@ -21,9 +21,7 @@ import Math.Vector3 as Vec3 exposing (vec3, Vec3)
 import Json.Decode as D exposing (Value)
 import Dict
 import Task
-import Selection exposing (intersections, CameraParameters)
-import Meshes exposing (..)
-
+import Platform.Cmd
 import Set exposing (Set)
 
 import Meshes exposing (..)
@@ -33,7 +31,6 @@ import Model exposing (Model, Selected(..), UnitTool(..))
 import Building exposing (buildingName, allBuildings, newBuilding)
 import Msg exposing (Msg (..))
 import Key
-import Camera
 import Camera exposing (Camera, lookAtMatrix, cameraPos)
 import Config
 
@@ -339,10 +336,22 @@ subscriptions model =
         ]
 
 
+textureFiles =
+    [ ( "aluminium", "../textures/aluminium.jpg" )
+    , ( "norway", "../textures/norway.png" )
+    ]
+
+textureTasks =
+    textureFiles
+        |> List.map (\(name, filename) ->
+                         Task.attempt (TextureLoaded name) (Texture.load filename))
+        |> Platform.Cmd.batch
+
+
 main : Program D.Value Model Msg
 main =
     Browser.element
-        { init = \_ -> ( init, Task.attempt (TextureLoaded "aluminium") (Texture.load "../textures/aluminium.jpg") )
+        { init = \_ -> ( init, textureTasks )
         , view = view
         , subscriptions = subscriptions
         , update = update
@@ -391,8 +400,19 @@ view model =
                 , tex = texture
                 }
 
-        bladeRotation = bladeMatrix model.time
+        renderBillboardMesh : Mat4 -> Texture -> WebGL.Entity
+        renderBillboardMesh modelMatrix texture =
+            WebGL.entityWith
+                settings
+                billboardVertexShader
+                billboardFragmentShader
+                billboardMesh
+                { modelViewProjection = Mat4.mul (perspective model.camera) modelMatrix
+                , tex = texture
+                , cameraPos = cameraPos model.camera
+                }
 
+        bladeRotation = bladeMatrix model.time
 
         renderedBlade =
             case Dict.get "aluminium" model.textures of
@@ -401,7 +421,14 @@ view model =
               Nothing ->
                   []
 
-        cursor = 
+        renderedNorway =
+            case Dict.get "norway" model.textures of
+              Just texture ->
+                  [ renderBillboardMesh (Mat4.translate3 1.0 0.3 0 <| Mat4.makeScale3 0.1 0.1 0.1) texture ]
+              Nothing ->
+                  []
+
+        cursor =
             case model.cursor of
                 Just pos ->
                     [ renderMesh
@@ -441,9 +468,11 @@ view model =
         onDown =
             { stopPropagation = True, preventDefault = True }
                 |> Mouse.onWithOptions "mousedown"
+
         onContextMenu =
             { stopPropagation = True, preventDefault = True }
                 |> Mouse.onWithOptions "contextmenu"
+
     in Html.div
         [ style "position" "absolute"
         , style "top" "0"
@@ -460,7 +489,8 @@ view model =
                 ( renderedBlade ++
                   [ renderMesh pizzaCutterHandleMesh <| Mat4.makeTranslate3 0 1 0
                   ] ++
-                  discObjects
+                  discObjects ++
+                  renderedNorway
                 )
             ]
             ++
@@ -603,6 +633,51 @@ texturedFragmentShader =
             vec3 normal = normalize(worldNormal);
             float lightFactor = clamp(dot(normal, normalize(lightDir)), 0.0, 1.0);
             gl_FragColor = vec4(ambientLight + lightFactor * texture2D(tex, vTexCoords).rgb, 1);
+        }
+
+    |]
+
+type alias BillboardUniforms =
+    { modelViewProjection : Mat4
+    , cameraPos : Vec3
+    , tex: Texture
+    }
+
+type alias BillboardFragment =
+    { vTexCoords : Vec2 }
+
+billboardVertexShader : Shader BillboardVertex BillboardUniforms BillboardFragment
+billboardVertexShader =
+    [glsl|
+
+        attribute vec3 position;
+        attribute vec2 texCoords;
+        uniform mat4 modelViewProjection;
+        uniform vec3 cameraPos;
+        varying vec2 vTexCoords;
+
+        void main () {
+            vec3 toCamera = normalize(cameraPos - position);
+            vec3 up = vec3(0.0, 1.0, 0.0);
+            vec3 right = cross(toCamera, up);
+            vec3 pos = right * position.x + cross(right, toCamera) * position.y;
+            gl_Position = modelViewProjection * vec4(pos, 1.0);
+            vTexCoords = texCoords;
+        }
+
+    |]
+
+
+billboardFragmentShader : Shader {} BillboardUniforms BillboardFragment
+billboardFragmentShader =
+    [glsl|
+
+        precision mediump float;
+        varying vec2 vTexCoords;
+        uniform sampler2D tex;
+
+        void main () {
+            gl_FragColor = texture2D(tex, vTexCoords);
         }
 
     |]
