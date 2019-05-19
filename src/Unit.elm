@@ -14,7 +14,7 @@ type Goal
     = BuildBuilding Int
     | MoveTo Vec3
     | Gather Int
-    | Deposit Resource.Kind Int
+    | Deposit Int Resource.Kind
 
 type alias Unit =
     { position : Vec3
@@ -34,8 +34,7 @@ updateUnit elapsedTime buildings resources unit =
         moveAmount = elapsedTime * Config.unitSpeed
 
         resourceKind siteIndex =
-            Maybe.withDefault Resource.Gold
-                <| Maybe.map (\{kind} -> kind)
+            Maybe.map (\{kind} -> kind)
                 <| Dict.get siteIndex resources
 
         (goalPos, goalOnCompletion, onCompletion) =
@@ -48,7 +47,7 @@ updateUnit elapsedTime buildings resources unit =
                     , Nothing
                     )
                 -- When the unit is carrying resources
-                Deposit resource index ->
+                Deposit index resource ->
                     ( Maybe.withDefault unit.position
                         <| Building.closestDepot
                            unit.position
@@ -61,8 +60,9 @@ updateUnit elapsedTime buildings resources unit =
                     ( Maybe.withDefault unit.position
                         <| Maybe.map (\b -> b.position)
                         <| Dict.get index resources
-                    , Deposit (resourceKind index) index
-                    , Nothing
+                    , Maybe.withDefault (MoveTo unit.position)
+                        <| Maybe.map (Deposit index) (resourceKind index)
+                    , Just <| ReduceResourceStock index
                     )
                 MoveTo pos ->
                     (pos, MoveTo pos, Nothing)

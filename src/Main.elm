@@ -226,8 +226,6 @@ onRightClick model =
                         <| List.map (\(i, {position}) -> (i, position))
                         <| Dict.toList (model.resourceSites)
 
-        _ = Debug.log "selectedResourceSite" selectedResourceSite
-
         goal = priorityMaybe [selectedResourceSite, moveGoal]
 
         selectedUnits = case model.selected of
@@ -258,7 +256,10 @@ updateUnits elapsedTime model =
                 (Unit.updateUnit elapsedTime model.buildings model.resourceSites)
                 model.units
     in
-    {model | units = units}
+        List.foldl
+            Model.applyModelChange
+            {model | units = units}
+            <| List.filterMap identity changes
 
 
 updateBuildings : Float -> Model -> Model
@@ -279,8 +280,6 @@ updateBuildings elapsedTime model =
                                 (goal == Unit.BuildBuilding index)
                         )
                         units
-
-                _ = Debug.log "buildingUnits" buildingUnits
 
                 status =
                     case building.status of
@@ -477,9 +476,13 @@ view model =
                     (cubeMesh size color)
                     (Mat4.mul bladeRotation (Mat4.makeTranslate fullPosition))
 
-        drawResource {position, kind} =
+        drawResource {position, kind, depletion} =
             let
-                meshes = resourceSiteMeshes kind
+                allMeshes = resourceSiteMeshes kind
+
+                amountToTake = ceiling <| (1-depletion) * (toFloat <| List.length allMeshes)
+
+                meshes = List.take amountToTake allMeshes
             in
                 List.map
                     (\mesh ->
@@ -542,7 +545,6 @@ buildMenu model =
     case model.selected of
         Just (SUnit _ _) ->
             -- Buildings
-            let _ = Debug.log "processing selected" "" in
             Html.div []
                 <| List.map
                     buildingButton
