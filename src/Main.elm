@@ -497,10 +497,12 @@ view model =
         drawBuilding {position, kind, status} =
             let
                 size = Config.buildingSize
-                color =
+                baseColor =
                     case kind of
                         Building.House -> vec3 0 1 0
                         Building.Depot -> vec3 0 0 1
+
+                color = Vec3.scale (if status == Building.Done then 1 else 0.5) baseColor
 
                 fullPosition =
                     case status of
@@ -588,7 +590,10 @@ buildMenu model =
                     buildingButton
                     allBuildings
         Just (SBuilding id) ->
-            Html.div [] [Html.button [Html.Events.onClick (BuildUnit id)] [Html.text "Build unit"]]
+            case Maybe.map .kind <| Dict.get id model.buildings of
+                Just Building.House ->
+                    Html.div [] [Html.button [Html.Events.onClick (BuildUnit id)] [Html.text "Build unit"]]
+                _ -> Html.div [] []
         Nothing -> Html.div [] []
 
 
