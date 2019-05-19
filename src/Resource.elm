@@ -24,8 +24,8 @@ symbol kind =
     case kind of
         Food -> "🍎"
         Wood -> "🌲"
-        Iron -> "🔨"
-        Gold -> "💍"
+        Iron -> "⛏"
+        Gold -> "💎"
 
 
 
@@ -48,7 +48,7 @@ resourceColors kind =
         Food -> (vec3 0 0.6 0.1, vec3 0.8 0.2 0.17)
         Wood -> (vec3 0.25 0.77 0.15, vec3 0.14 0.39 0.15)
         Iron -> (vec3 0.39 0.39 0.39, vec3 0.64 0.45 0.18)
-        Gold -> (vec3 0.89 0.89 0.22, vec3 0.93 0.70 0.27)
+        Gold -> (vec3 0.13 0.62 0.87, vec3 0.12 0.28 0.87)
 
 
 

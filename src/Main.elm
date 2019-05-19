@@ -597,7 +597,9 @@ resourceDisplay model =
     Html.div []
         <| List.map (\t -> Html.span [] [Html.text t])
         <| List.map
-            (\(resource, amount) -> (Resource.symbol resource) ++ ": " ++ (String.fromInt amount))
+            (\(resource, amount) ->
+                (Resource.symbol resource) ++ ": " ++ (String.fromInt amount) ++ " | "
+            )
         model.resources
 
 

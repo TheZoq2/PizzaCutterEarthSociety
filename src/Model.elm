@@ -61,5 +61,11 @@ applyModelChange change model =
                     <| Dict.toList model.resourceSites
             in
                 { model | resourceSites = newSites }
-        ModelChange.AddResource index ->
-            model
+        ModelChange.AddResource kind ->
+            let
+                newResources =
+                    List.map
+                        (\(k, amount) -> (k, if k == kind then amount + 1 else amount))
+                        model.resources
+            in
+                { model | resources = newResources }

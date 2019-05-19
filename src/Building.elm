@@ -40,4 +40,5 @@ closestDepot pos buildings =
         <| List.map Tuple.second
         <| List.sortBy Tuple.first
         <| List.map (\{position} -> (Vec3.distance position pos, position))
+        <| List.filter (\{status} -> status == Done)
         <| List.filter (\{kind} -> kind == Depot) buildings
