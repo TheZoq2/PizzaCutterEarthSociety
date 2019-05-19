@@ -73,7 +73,8 @@ update message model =
         next_model =
             case message of
                 Tick elapsed ->
-                    updateBuildings (elapsed / 1000)
+                    updateResourceSites
+                     <| updateBuildings (elapsed / 1000)
                      <| updateUnits (elapsed / 1000)
                         { model
                             | time = model.time + elapsed
@@ -284,6 +285,17 @@ onRightClick model =
         {model | units = newUnits}
 
 
+shouldLive : Model -> Vec3 -> Bool
+shouldLive model pos =
+    let
+        pos_ = (bladeCoordInWorld (bladeMatrix model.time) pos)
+    in
+    if Vec3.getX pos_ > 0 then
+        True
+    else
+        False
+
+
 updateUnits : Float -> Model -> Model
 updateUnits elapsedTime model =
     let
@@ -330,11 +342,21 @@ updateBuildings elapsedTime model =
                 {building | status = status}
 
         newBuildings =
-            Dict.map
-                (buildingFn model.units)
-                model.buildings
+            Dict.filter (\_ {position} -> shouldLive model position)
+                <| Dict.map
+                    (buildingFn model.units)
+                    model.buildings
     in
         {model | buildings = newBuildings}
+
+
+updateResourceSites : Model -> Model
+updateResourceSites model =
+    let
+        newResourceSite =
+            Dict.filter (\_ {position} -> shouldLive model position) model.resourceSites
+    in
+        { model | resourceSites = newResourceSite }
 
 
 cutterMouseIntersections : Model -> (Int, Int) -> List Vec3
